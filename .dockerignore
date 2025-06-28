@@ -1,0 +1,7 @@
+.idea
+coverage
+kubernetes
+node_modules
+test
+database
+dist

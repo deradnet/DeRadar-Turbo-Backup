@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: dockerfiles/dev.Dockerfile
+    container_name: dev.derad.app
+    ports:
+      - "9995:8080"
+    volumes:
+      - ./src:/app/src
+      - ./config.yaml:/app/config.yaml
+      - ./database:/app/database
+      - ./keys:/app/keys
+    environment:
+      - NODE_ENV=development
+      - APP_VERSION=0.0.1

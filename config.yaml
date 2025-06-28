@@ -1,0 +1,14 @@
+api:
+  enabled: false
+auth:
+  username: admin
+  password: admin
+  secret:
+database:
+  path: /data/db.sqlite
+antennas:
+  - id: antenna-1
+    url: http://localhost:8078/data/aircraft.json
+    enabled: true
+wallet:
+  private_key_name:

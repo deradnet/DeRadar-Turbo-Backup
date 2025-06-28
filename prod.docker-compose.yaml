@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: dockerfiles/prod.Dockerfile
+    container_name: prod.derad.app
+    volumes:
+      - ./database:/data
+      - ./config.yaml:/app/config.yaml
+      - ./keys:/app/keys
+    ports:
+      - "9995:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
