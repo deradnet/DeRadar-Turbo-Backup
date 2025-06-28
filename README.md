@@ -49,7 +49,7 @@ The system runs continuously, fetching aircraft data every 60 seconds from confi
 - Automatic filtering of empty datasets to save storage costs
 - Mutex-protected operations to prevent concurrent uploads
 
-### **Blockchain Archiving**
+### **Archiving**
 - Permanent data storage on Arweave network
 - ARIO Turbo SDK integration for efficient and turbo fast uploads
 - Metadata tagging with timestamps and source identification
