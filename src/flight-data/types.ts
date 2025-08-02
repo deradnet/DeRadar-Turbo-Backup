@@ -8,6 +8,9 @@ export interface Aircraft {
   hex: string;
   type: string;
   flight?: string;
+  r?: string;
+  t?: string;
+  desc?: string;
   alt_baro?: number;
   alt_geom?: number;
   gs?: number;
@@ -53,6 +56,8 @@ export interface Aircraft {
   messages: number;
   seen: number;
   rssi: number;
+  dst?: number;
+  dir?: number;
   lastPosition?: LastPosition;
   gpsOkBefore?: number;
   gpsOkLat?: number;
