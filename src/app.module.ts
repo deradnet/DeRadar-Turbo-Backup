@@ -32,8 +32,7 @@ import { ApiEnabledGuard } from './common/guards/api-enabled.guard';
     TypeOrmModule.forFeature([ArchiveRecord]),
     HttpModule,
     ScheduleModule.forRoot(),
-    ArchiveModule,
-    FlightDataModule,
+    ArchiveModule, // Exports AircraftTrackerService
     FlightDataModule,
     AuthModule,
   ],

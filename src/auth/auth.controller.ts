@@ -16,7 +16,7 @@ export class AuthController {
 
   @Get('login')
   getLoginPage(@Res() res: Response) {
-    return res.render('login');
+    return res.render('admin-login');
   }
 
   @Post('login')

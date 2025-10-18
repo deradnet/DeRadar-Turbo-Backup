@@ -2,8 +2,8 @@ api:
   enabled: true
 auth:
   username: admin
-  password: admin
-  secret: tester
+  password: CHANGE_ME_STRONG_PASSWORD_HERE
+  secret: CHANGE_ME_SESSION_SECRET_HERE
 database:
   path: /data/db.sqlite
 antennas:
@@ -11,4 +11,4 @@ antennas:
     url: https://antenna-1.derad.org/aircraft.json
     enabled: true
 wallet:
-  private_key_name: arweave-keyfile-iB6QxoeJJZUzavEGmO3azESuqfb0kdHePujYsIx_kVQ.json
+  private_key_name: arweave-keyfile-YOURKEY.json

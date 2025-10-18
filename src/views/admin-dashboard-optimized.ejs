@@ -1,0 +1,2438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeRadar Node Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@latest/font/lucide.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/TimelineMax.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#0a0a0b',
+                            card: '#161618',
+                            panel: '#111113',
+                            hover: '#1e1e20',
+                            border: '#252528',
+                            text: '#e0e0e0'
+                        },
+                        queue: {
+                            primary: '#60a5fa',
+                            secondary: '#3b82f6',
+                            accent: '#93c5fd',
+                            completed: '#34d399',
+                            pending: '#fbbf24',
+                            failed: '#f87171',
+                            waiting: '#a78bfa',
+                            slot: '#60a5fa',
+                            upload: '#10b981'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        [x-cloak] { display: none !important; }
+        i[class*="icon-"] {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        i[class*="icon-"]:hover {
+            transform: scale(1.15);
+        }
+
+        @keyframes icon-pulse {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.8;
+                transform: scale(1.05);
+            }
+        }
+        @keyframes icon-spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @keyframes icon-bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+        }
+        .icon-pulse {
+            animation: icon-pulse 2s ease-in-out infinite;
+        }
+        .icon-spin-slow {
+            animation: icon-spin-slow 3s linear infinite;
+        }
+        .icon-bounce {
+            animation: icon-bounce 1s ease-in-out infinite;
+        }
+
+        .icon-glow-blue {
+            filter: drop-shadow(0 0 4px rgba(96, 165, 250, 0.6));
+        }
+        .icon-glow-green {
+            filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.6));
+        }
+        .icon-glow-yellow {
+            filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.6));
+        }
+        .icon-glow-red {
+            filter: drop-shadow(0 0 4px rgba(248, 113, 113, 0.6));
+        }
+        .wagon {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 0.5rem;
+            position: relative;
+            overflow: hidden;
+            flex-shrink: 0;
+            animation: wagon-enter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .wagon:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+        @keyframes wagon-enter {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+        @keyframes wagon-exit {
+            0% {
+                opacity: 1;
+                transform: scale(1) translateX(0);
+            }
+            50% {
+                opacity: 0.5;
+                transform: scale(0.95) translateX(50px);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.8) translateX(100px);
+                height: 0;
+                margin: 0;
+                padding: 0;
+            }
+        }
+        .wagon-exiting {
+            animation: wagon-exit 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            pointer-events: none;
+        }
+        .wagon-data-hash {
+            position: absolute;
+            bottom: 3px;
+            right: 5px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-size: 0.6rem;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 0.5px;
+            border: 1px solid rgba(147, 197, 253, 0.3);
+            color: #93c5fd;
+            backdrop-filter: blur(4px);
+            transition: all 0.2s ease;
+            z-index: 15;
+        }
+        .wagon-data-hash:hover {
+            background: rgba(96, 165, 250, 0.2);
+            border-color: #60a5fa;
+            color: #60a5fa;
+            transform: scale(1.05);
+        }
+        .wagon:hover .wagon-data-hash {
+            border-color: #60a5fa;
+            box-shadow: 0 0 8px rgba(96, 165, 250, 0.3);
+        }
+        .wagon-new-indicator {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            width: 12px;
+            height: 12px;
+            background: #22c55e;
+            border-radius: 50%;
+            border: 2px solid #0a0a0b;
+            animation: new-pulse 2s ease-in-out infinite;
+            z-index: 30;
+        }
+        @keyframes new-pulse {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+                transform: scale(1);
+            }
+            50% {
+                box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+                transform: scale(1.1);
+            }
+        }
+        .wagon-processing {
+            background: linear-gradient(145deg, #1e3a8a, #1e40af);
+            border: 1px solid #3b82f6;
+        }
+        .wagon-slot {
+            background: linear-gradient(145deg, #1a1a1c, #161618);
+            border: 2px dashed #60a5fa;
+            animation: slot-pulse 2s infinite;
+        }
+        .wagon-slot.occupied {
+            background: linear-gradient(145deg, #047857, #059669);
+            border: 1px solid #10b981;
+            animation: none;
+        }
+        @keyframes slot-pulse {
+            0% { border-color: #60a5fa; box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.2); }
+            50% { border-color: #93c5fd; box-shadow: 0 0 0 8px rgba(96, 165, 250, 0); }
+            100% { border-color: #60a5fa; box-shadow: 0 0 0 0 rgba(96, 165, 250, 0); }
+        }
+        .wagon-waiting {
+            background: linear-gradient(145deg, #6b7280, #9ca3af);
+            border: 2px solid #d1d5db;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+        .wagon-waiting.queued,
+        .wagon-waiting.empty,
+        .wagon-waiting.more {
+            background: linear-gradient(145deg, #6b7280, #9ca3af);
+            border: 2px solid #d1d5db;
+        }
+        .wagon-waiting.empty {
+            border-style: dashed;
+            opacity: 0.6;
+        }
+        .wagon-waiting.overflow {
+            background: linear-gradient(145deg, #ea580c, #f97316);
+            border: 2px solid #fb923c;
+            animation: pulse 1s infinite;
+        }
+        .wagon-waiting .wagon-title {
+            font-size: 0.875rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+        .wagon-waiting .wagon-title.long-text {
+            font-size: 0.75rem;
+        }
+        .wagon-waiting .wagon-subtitle {
+            font-size: 0.75rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .wagon-waiting .wagon-subtitle.long-text {
+            font-size: 0.625rem;
+        }
+        .wagon-success {
+            background: linear-gradient(145deg, #7c3aed, #8b5cf6);
+            border: 1px solid #a78bfa;
+            position: relative;
+            overflow: hidden;
+
+            transform: translateZ(0);
+            backface-visibility: hidden;
+            -webkit-font-smoothing: subpixel-antialiased;
+        }
+        .wagon-success.completed {
+            background: linear-gradient(145deg, #6d28d9, #7c3aed);
+            border: 1px solid #c4b5fd;
+        }
+        .wagon-new-arrival {
+            animation: new-arrival 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes new-arrival {
+            0% {
+                opacity: 0;
+                transform: scale(0.3) translateY(-50px) rotate(-10deg);
+            }
+            50% {
+                opacity: 1;
+                transform: scale(1.15) translateY(5px) rotate(2deg);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) translateY(0) rotate(0deg);
+            }
+        }
+
+        .wagon-success.wagon-new-arrival .scanner-beam {
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(90deg,
+                transparent 0%,
+                rgba(96, 165, 250, 0.4) 30%,
+                rgba(147, 197, 253, 0.8) 50%,
+                rgba(96, 165, 250, 0.4) 70%,
+                transparent 100%
+            );
+            animation: scanner-sweep 0.5s ease-in-out 0.5s 1;
+            z-index: 10;
+            pointer-events: none;
+            filter: blur(6px);
+            will-change: left, opacity;
+            transform: translateZ(0);
+        }
+        @keyframes scanner-sweep {
+            0% {
+                left: -100%;
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                left: 100%;
+                opacity: 0;
+            }
+        }
+
+        .wagon-success.wagon-new-arrival {
+            position: relative;
+            animation: data-beam-arrival 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            opacity: 1 !important;
+        }
+
+        @keyframes data-beam-arrival {
+            0% {
+                transform: translateX(-120px) scale(0.95);
+                opacity: 0;
+                filter: blur(10px) brightness(1.5);
+            }
+            50% {
+                filter: blur(2px) brightness(1.3);
+            }
+            100% {
+                transform: translateX(0) scale(1);
+                opacity: 1;
+                filter: blur(0) brightness(1);
+            }
+        }
+
+        .wagon-success.wagon-new-arrival::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg,
+                transparent 0%,
+                rgba(147, 197, 253, 0.4) 20%,
+                rgba(168, 85, 247, 0.6) 50%,
+                rgba(147, 197, 253, 0.4) 80%,
+                transparent 100%
+            );
+            animation: data-flow-beam 0.8s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+            mix-blend-mode: screen;
+            pointer-events: none;
+        }
+        @keyframes data-flow-beam {
+            0% {
+                left: -100%;
+                opacity: 0;
+            }
+            50% {
+                opacity: 1;
+            }
+            100% {
+                left: 100%;
+                opacity: 0;
+            }
+        }
+
+        .wagon-success.wagon-new-arrival {
+            box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+            border-color: #a78bfa;
+        }
+
+        .wagon-success {
+            transition: all 1s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 1;
+        }
+
+        .wagon-success .success-particle-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .wagon-success .data-stream {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 2px,
+                rgba(147, 197, 253, 0.03) 2px,
+                rgba(147, 197, 253, 0.03) 4px
+            );
+            animation: data-flow 0.33s linear infinite;
+            pointer-events: none;
+            z-index: 3;
+        }
+        @keyframes data-flow {
+            0% {
+                transform: translateX(0);
+            }
+            100% {
+                transform: translateX(4px);
+            }
+        }
+        .progress-ring {
+            transition: stroke-dashoffset 0.5s ease-in-out;
+        }
+        .sidebar-nav button.active {
+            background-color: #1e1e20;
+            border-left: 3px solid #60a5fa;
+        }
+        .sidebar-nav button:not(.active):hover {
+            background-color: #1a1a1c;
+        }
+
+        .power-switch {
+            --color-invert: #10b981;
+            --width: 100px;
+            --height: 100px;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: var(--width);
+            height: var(--height);
+            margin: 0 auto;
+        }
+        .power-switch .button {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        .power-switch .button:after {
+            content: "";
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            background: radial-gradient(circle closest-side, var(--color-invert), transparent);
+            filter: blur(20px);
+            opacity: 0;
+            transition: opacity 1s ease, transform 1s ease;
+            transform: perspective(1px) translateZ(0);
+            backface-visibility: hidden;
+        }
+        .power-switch .power-on,
+        .power-switch .power-off {
+            height: 100%;
+            width: 100%;
+            position: absolute;
+            z-index: 1;
+            fill: none;
+            stroke: var(--color-invert);
+            stroke-width: 8px;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        .power-switch .power-on .line,
+        .power-switch .power-off .line {
+            opacity: .2;
+        }
+        .power-switch .power-on .circle,
+        .power-switch .power-off .circle {
+            opacity: .2;
+            transform: rotate(-58deg);
+            transform-origin: center 80px;
+            stroke-dasharray: 220;
+            stroke-dashoffset: 40;
+        }
+        .power-switch .power-on {
+            filter: drop-shadow(0px 0px 6px rgba(16, 185, 129, 0.8));
+        }
+        .power-switch .power-on .line {
+            opacity: 0;
+            transition: opacity .3s ease 1s;
+        }
+        .power-switch .power-on .circle {
+            opacity: 1;
+            stroke-dashoffset: 220;
+            transition: transform 0s ease, stroke-dashoffset 1s ease 0s;
+        }
+        .power-switch input {
+            position: absolute;
+            height: 100%;
+            width: 100%;
+            z-index: 2;
+            cursor: pointer;
+            opacity: 0;
+        }
+        .power-switch input:checked + .button:after {
+            opacity: 0.15;
+            transform: scale(2) perspective(1px) translateZ(0);
+            backface-visibility: hidden;
+            transition: opacity .5s ease, transform .5s ease;
+        }
+        .power-switch input:checked + .button .power-on,
+        .power-switch input:checked + .button .power-off {
+            animation: click-animation .3s ease forwards;
+            transform: scale(1);
+        }
+        .power-switch input:checked + .button .power-on .line,
+        .power-switch input:checked + .button .power-off .line {
+            animation: line-animation .8s ease-in forwards;
+        }
+        .power-switch input:checked + .button .power-on .circle,
+        .power-switch input:checked + .button .power-off .circle {
+            transform: rotate(302deg);
+        }
+        .power-switch input:checked + .button .power-on .line {
+            opacity: 1;
+            transition: opacity .05s ease-in .55s;
+        }
+        .power-switch input:checked + .button .power-on .circle {
+            transform: rotate(302deg);
+            stroke-dashoffset: 40;
+            transition: transform .4s ease .2s, stroke-dashoffset .4s ease .2s;
+        }
+        @keyframes line-animation {
+            0% { transform: translateY(0); }
+            10% { transform: translateY(10px); }
+            40% { transform: translateY(-25px); }
+            60% { transform: translateY(-25px); }
+            85% { transform: translateY(10px); }
+            100% { transform: translateY(0px); }
+        }
+        @keyframes click-animation {
+            0% { transform: scale(1); }
+            50% { transform: scale(.9); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes spin-fast {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @keyframes spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @keyframes spin-reverse {
+            from { transform: rotate(360deg); }
+            to { transform: rotate(0deg); }
+        }
+        @keyframes matrix-rain {
+            0% { transform: translateY(-100%); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(100%); opacity: 0; }
+        }
+        @keyframes scan-line {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+        @keyframes energy-pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.5; }
+        }
+        @keyframes particle-float {
+            0%, 100% { transform: translate(0, 0); opacity: 0.5; }
+            25% { transform: translate(5px, -5px); opacity: 1; }
+            50% { transform: translate(0, -10px); opacity: 0.5; }
+            75% { transform: translate(-5px, -5px); opacity: 1; }
+        }
+        @keyframes orbit-1 {
+            from { transform: translate(-50%, -50%) rotate(0deg) translateX(15px) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg) translateX(15px) rotate(-360deg); }
+        }
+        @keyframes orbit-2 {
+            from { transform: translate(-50%, -50%) rotate(0deg) translateX(18px) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg) translateX(18px) rotate(-360deg); }
+        }
+        @keyframes orbit-3 {
+            from { transform: translate(-50%, -50%) rotate(0deg) translateX(21px) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg) translateX(21px) rotate(-360deg); }
+        }
+        @keyframes shockwave {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        @keyframes glitch {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-1px); }
+            40% { transform: translateX(1px); }
+            60% { transform: translateX(-1px); }
+            80% { transform: translateX(1px); }
+        }
+        .animate-spin-fast { animation: spin-fast 2s linear infinite; }
+        .animate-spin-slow { animation: spin-slow 4s linear infinite; }
+        .animate-spin-reverse { animation: spin-reverse 3s linear infinite; }
+        .animate-matrix-rain { animation: matrix-rain 2s linear infinite; }
+        .animate-scan-line { animation: scan-line 2s linear infinite; }
+        .animate-energy-pulse { animation: energy-pulse 1.5s ease-in-out infinite; }
+        .animate-particle-float { animation: particle-float 3s ease-in-out infinite; }
+        .animate-orbit-1 { animation: orbit-1 3s linear infinite; }
+        .animate-orbit-2 { animation: orbit-2 4s linear infinite; }
+        .animate-orbit-3 { animation: orbit-3 5s linear infinite; }
+        .animate-shockwave { animation: shockwave 2s ease-out infinite; }
+        .animate-glitch { animation: glitch 0.3s ease-in-out infinite; }
+        .bg-gradient-conic-fast { background: conic-gradient(from 0deg, transparent, white, transparent); }
+        .bg-gradient-conic-slow { background: conic-gradient(from 0deg, transparent, cyan, transparent); }
+        .bg-gradient-conic-reverse { background: conic-gradient(from 0deg, transparent, blue, transparent); }
+        .stat-card {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .has-tooltip {
+            position: relative;
+            cursor: help;
+            display: inline-block;
+            border-bottom: 1px dotted rgba(96, 165, 250, 0.3);
+            transition: border-color 0.2s ease;
+        }
+        .has-tooltip:hover {
+            border-bottom-color: rgba(96, 165, 250, 0.6);
+        }
+        .tooltip {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(30, 41, 59, 0.98);
+            backdrop-filter: blur(8px);
+            color: #e2e8f0;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.7;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(96, 165, 250, 0.15);
+            pointer-events: none;
+            min-width: 200px;
+            max-width: 400px;
+            white-space: normal;
+            font-weight: 400;
+        }
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: rgba(30, 41, 59, 0.98);
+        }
+        .has-tooltip:hover .tooltip {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(-4px);
+        }
+        .activity-log::-webkit-scrollbar {
+            width: 6px;
+        }
+        .activity-log::-webkit-scrollbar-track {
+            background: #161618;
+            border-radius: 3px;
+        }
+        .activity-log::-webkit-scrollbar-thumb {
+            background: #60a5fa;
+            border-radius: 3px;
+        }
+        .train-container {
+            display: flex;
+            overflow-x: auto;
+            padding: 1rem;
+            gap: 0.5rem;
+            scrollbar-width: thin;
+            scrollbar-color: #60a5fa #161618;
+            scroll-behavior: smooth;
+            align-items: center;
+            min-height: 8rem;
+        }
+        .train-container::-webkit-scrollbar {
+            height: 6px;
+        }
+        .train-container::-webkit-scrollbar-track {
+            background: #161618;
+            border-radius: 3px;
+        }
+        .train-container::-webkit-scrollbar-thumb {
+            background: #60a5fa;
+            border-radius: 3px;
+        }
+        .wagon-connector {
+            width: 1.5rem;
+            height: 0.25rem;
+            background: linear-gradient(to right, #60a5fa, #a78bfa);
+            align-self: center;
+            position: relative;
+            border-radius: 0.125rem;
+            flex-shrink: 0;
+            box-shadow: 0 0 8px rgba(96, 165, 250, 0.3);
+        }
+        .wagon-connector::before {
+            content: '';
+            position: absolute;
+            width: 0.5rem;
+            height: 0.5rem;
+            background: #60a5fa;
+            border-radius: 50%;
+            left: -0.125rem;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 6px rgba(96, 165, 250, 0.5);
+        }
+        .wagon-connector::after {
+            content: '';
+            position: absolute;
+            width: 0.5rem;
+            height: 0.5rem;
+            background: #a78bfa;
+            border-radius: 50%;
+            right: -0.125rem;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 6px rgba(167, 139, 250, 0.5);
+        }
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-active {
+            background-color: #34d399;
+            box-shadow: 0 0 8px rgba(52, 211, 153, 0.5);
+        }
+        .status-inactive {
+            background-color: #f87171;
+            box-shadow: 0 0 8px rgba(248, 113, 113, 0.5);
+        }
+        .progress-bar {
+            height: 6px;
+            border-radius: 3px;
+            background: #1a1a1c;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        .metric-card {
+            background: linear-gradient(145deg, #161618, #111113);
+            border-radius: 0.75rem;
+            border: 1px solid #252528;
+            transition: all 0.3s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+        }
+        .success-highlight {
+            animation: success-pulse 2s infinite;
+        }
+        @keyframes success-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(52, 211, 153, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+        }
+        .wagon-label {
+            position: absolute;
+            top: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .wagon-overflow {
+            background: linear-gradient(145deg, #dc2626, #ef4444) !important;
+            border: 2px solid #f87171 !important;
+            animation: overflow-pulse 1.5s infinite !important;
+        }
+        @keyframes overflow-pulse {
+            0%, 100% {
+                box-shadow: 0 4px 6px rgba(220, 38, 38, 0.3), 0 0 0 0 rgba(248, 113, 113, 0.4);
+                transform: scale(1);
+            }
+            50% {
+                box-shadow: 0 8px 15px rgba(220, 38, 38, 0.5), 0 0 0 8px rgba(248, 113, 113, 0);
+                transform: scale(1.05);
+            }
+        }
+        .wagon-count-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            border: 2px solid #0a0a0b;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
+            z-index: 20;
+        }
+        @media (max-width: 1400px) {
+            .wagon {
+                min-width: 5.5rem !important;
+                min-height: 5rem !important;
+            }
+        }
+        @media (max-width: 1200px) {
+            .wagon {
+                min-width: 5rem !important;
+                min-height: 4.5rem !important;
+            }
+        }
+        .train-track {
+            position: absolute;
+            bottom: 1.5rem;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: repeating-linear-gradient(
+                90deg,
+                #252528 0px,
+                #252528 20px,
+                transparent 20px,
+                transparent 30px
+            );
+            pointer-events: none;
+            opacity: 0.5;
+        }
+        .train-track::before,
+        .train-track::after {
+            content: '';
+            position: absolute;
+            height: 2px;
+            background: #1a1a1c;
+            width: 100%;
+        }
+        .train-track::before {
+            top: -4px;
+        }
+        .train-track::after {
+            bottom: -4px;
+        }
+        .wagon-glow-slot {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 0 15px rgba(96, 165, 250, 0.3);
+        }
+        .wagon-glow-active {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 0 20px rgba(16, 185, 129, 0.4);
+        }
+        .wagon-glow-waiting {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 0 20px rgba(167, 139, 250, 0.3);
+        }
+        .wagon-glow-success {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 0 25px rgba(139, 92, 246, 0.6);
+        }
+        .wagon-sparkle {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 20px;
+            height: 20px;
+            background: radial-gradient(circle, #fbbf24, #f59e0b);
+            border-radius: 50%;
+            animation: sparkle 1.5s ease-in-out;
+            pointer-events: none;
+            z-index: 25;
+        }
+        @keyframes sparkle {
+            0% {
+                opacity: 1;
+                transform: scale(0.5) rotate(0deg);
+            }
+            50% {
+                opacity: 1;
+                transform: scale(1.2) rotate(180deg);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.3) rotate(360deg);
+            }
+        }
+
+        .wagon-particle-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 30;
+        }
+        .train-controls {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            display: flex;
+            gap: 0.5rem;
+            z-index: 10;
+        }
+        .train-control-btn {
+            background: rgba(22, 22, 24, 0.8);
+            border: 1px solid #252528;
+            color: #93c5fd;
+            padding: 0.4rem 0.6rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            backdrop-filter: blur(4px);
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .train-control-btn:hover {
+            background: rgba(96, 165, 250, 0.2);
+            border-color: #60a5fa;
+            color: #60a5fa;
+        }
+
+        #canvas {
+            cursor: crosshair;
+            z-index: 2;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        #overlay {
+            background: radial-gradient(ellipse at center, rgba(0,0,0,.0) 10%, rgba(0,0,0,.8) 80%, rgba(0,0,0,1) 90%, rgba(0,0,0,1) 100%);
+            z-index: 3;
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 100%;
+        }
+        #bg_glow {
+            z-index: 1;
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 100%;
+        }
+        #overlay:hover {
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-dark-bg text-dark-text font-sans overflow-hidden" x-data="dashboard()" x-cloak>
+    <div class="fixed inset-y-0 left-0 z-50 w-48 bg-dark-panel border-r border-dark-border flex flex-col">
+        <div class="flex items-center px-5 py-6 border-b border-dark-border">
+            <div class="group relative p-2 rounded-lg shadow-lg overflow-hidden cursor-pointer transition-all duration-500 ease-out hover:scale-110 hover:rotate-3 bg-gradient-to-br from-blue-600 via-cyan-600 to-blue-800 hover:shadow-[0_0_30px_rgba(59,130,246,0.6)] hover:border hover:border-white/30" style="background: linear-gradient(135deg, rgb(37, 99, 235) 0%, rgb(8, 145, 178) 25%, rgb(2, 132, 199) 50%, rgb(3, 105, 161) 75%, rgb(30, 58, 138) 100%);">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide icon-radar w-5 h-5 text-white relative z-20 transition-all duration-700 ease-out will-change-transform group-hover:rotate-[360deg] group-hover:scale-125 group-hover:drop-shadow-[0_0_12px_rgba(255,255,255,1)] group-hover:text-cyan-100" style="filter: drop-shadow(rgba(255, 255, 255, 0.5) 0px 0px 6px);">
+                    <path d="M19.07 4.93A10 10 0 0 0 6.99 3.34"></path>
+                    <path d="M4 6h.01"></path>
+                    <path d="M2.29 9.62A10 10 0 1 0 21.31 8.35"></path>
+                    <path d="M16.24 7.76A6 6 0 1 0 8.23 16.67"></path>
+                    <path d="M12 18h.01"></path>
+                    <path d="M17.99 11.66A6 6 0 0 1 15.77 16.67"></path>
+                    <circle cx="12" cy="12" r="2"></circle>
+                    <path d="m13.41 10.59 5.66-5.66"></path>
+                </svg>
+                <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out pointer-events-none">
+                    <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse rounded-lg"></div>
+                    <div class="absolute inset-0">
+                        <div class="absolute inset-0 bg-gradient-conic-fast from-transparent via-white/40 to-transparent animate-spin-fast rounded-full"></div>
+                        <div class="absolute inset-0 bg-gradient-conic-slow from-transparent via-cyan-300/30 to-transparent animate-spin-slow rounded-full"></div>
+                        <div class="absolute inset-0 bg-gradient-conic-reverse from-transparent via-blue-300/20 to-transparent animate-spin-reverse rounded-full"></div>
+                    </div>
+                    <div class="absolute inset-0">
+                        <div class="absolute inset-0 border-2 border-white/20 rounded-full animate-ping"></div>
+                        <div class="absolute inset-1 border border-cyan-300/30 rounded-full animate-ping" style="animation-delay: 200ms;"></div>
+                    </div>
+                    <div class="absolute inset-0 overflow-hidden rounded-lg">
+                        <div class="absolute top-0 left-1 w-px h-full bg-gradient-to-b from-transparent via-green-400/50 to-transparent animate-matrix-rain"></div>
+                        <div class="absolute top-0 right-1 w-px h-full bg-gradient-to-b from-transparent via-blue-400/50 to-transparent animate-matrix-rain" style="animation-delay: 300ms;"></div>
+                    </div>
+                    <div class="absolute inset-0">
+                        <div class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent animate-scan-line"></div>
+                        <div class="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-300/40 to-transparent animate-scan-line" style="animation-delay: 400ms;"></div>
+                    </div>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="w-1 h-1 bg-white rounded-full animate-energy-pulse shadow-[0_0_8px_rgba(255,255,255,0.8)]"></div>
+                    </div>
+                    <div class="absolute inset-0">
+                        <div class="absolute top-0 left-0 w-0.5 h-0.5 bg-cyan-300 rounded-full animate-particle-float"></div>
+                        <div class="absolute top-0 right-0 w-0.5 h-0.5 bg-blue-300 rounded-full animate-particle-float" style="animation-delay: 100ms;"></div>
+                        <div class="absolute bottom-0 left-0 w-0.5 h-0.5 bg-purple-300 rounded-full animate-particle-float" style="animation-delay: 200ms;"></div>
+                        <div class="absolute bottom-0 right-0 w-0.5 h-0.5 bg-pink-300 rounded-full animate-particle-float" style="animation-delay: 300ms;"></div>
+                        <div class="absolute inset-0">
+                            <div class="absolute top-1/2 left-1/2 w-0.5 h-0.5 bg-white rounded-full animate-orbit-1"></div>
+                            <div class="absolute top-1/2 left-1/2 w-0.5 h-0.5 bg-cyan-300 rounded-full animate-orbit-2"></div>
+                            <div class="absolute top-1/2 left-1/2 w-0.5 h-0.5 bg-blue-300 rounded-full animate-orbit-3"></div>
+                        </div>
+                    </div>
+                    <div class="absolute inset-0">
+                        <div class="absolute inset-0 border-2 border-white/30 rounded-full animate-shockwave"></div>
+                    </div>
+                    <div class="absolute inset-0 bg-gradient-to-r from-red-500/10 via-transparent to-blue-500/10 animate-glitch"></div>
+                </div>
+            </div>
+            <div class="ml-3">
+                <h1 class="text-lg font-bold text-white">DeRadar</h1>
+                <p class="text-xs text-gray-400 mt-0.5">Powered by AR.IO</p>
+            </div>
+        </div>
+        <div class="px-4 py-3 border-b border-dark-border bg-gradient-to-r from-dark-panel to-dark-bg">
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">System Status</span>
+                    <div class="text-xs text-gray-500 mt-0.5">
+                        <span x-text="stats.isRunning ? 'Processing live data' : 'System paused'"></span>
+                    </div>
+                </div>
+                <div class="power-switch" style="--width: 45px; --height: 45px;">
+                    <input type="checkbox" @click="toggleTracking()" :checked="stats.isRunning" />
+                    <div class="button">
+                        <svg class="power-off" viewBox="0 0 150 150">
+                            <line class="line" x1="75" y1="34" x2="75" y2="58"/>
+                            <circle class="circle" cx="75" cy="80" r="35"/>
+                        </svg>
+                        <svg class="power-on" viewBox="0 0 150 150">
+                            <line class="line" x1="75" y1="34" x2="75" y2="58"/>
+                            <circle class="circle" cx="75" cy="80" r="35"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <nav class="flex-1 py-4 sidebar-nav">
+            <template x-for="item in navigation" :key="item.id">
+                <button
+                    @click="currentPage = item.id"
+                    :class="currentPage === item.id ? 'active text-white' : 'text-gray-400'"
+                    class="w-full flex items-center px-5 py-3 transition-all duration-200 mb-1"
+                >
+                    <i :class="item.icon" class="mr-3"></i>
+                    <span x-text="item.name" class="text-base"></span>
+                </button>
+            </template>
+        </nav>
+        <div class="p-4 border-t border-dark-border">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-queue-primary to-queue-secondary flex items-center justify-center">
+                        <i class="icon-user text-white text-sm"></i>
+                    </div>
+                    <span class="ml-3 text-sm">Admin User</span>
+                </div>
+                <button @click="logout" class="p-2 text-gray-400 hover:text-white rounded-lg transition-colors" title="Sign Out">
+                    <i class="icon-log-out"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="ml-48 h-screen flex flex-col">
+        <header class="bg-dark-card border-b border-dark-border px-6 py-4 flex items-center justify-between flex-shrink-0">
+            <div class="flex items-center space-x-3">
+                <div class="w-12 h-12 flex items-center justify-center bg-gradient-to-br from-queue-primary/20 to-queue-secondary/20 rounded-lg border border-queue-primary/30">
+                    <i :class="navigation.find(item => item.id === currentPage)?.icon || 'icon-layout-dashboard'" class="text-queue-primary text-2xl"></i>
+                </div>
+                <h2 class="text-xl font-bold text-white" x-text="currentPageName"></h2>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2 px-3 py-1.5 bg-dark-panel rounded-lg border border-dark-border">
+                    <i class="icon-clock text-gray-400 text-sm"></i>
+                    <span class="text-xs text-gray-400" x-text="stats.uptime"></span>
+                </div>
+                <div class="flex items-center space-x-2 px-3 py-1.5 rounded-lg border"
+                     :class="stats.isRunning ? 'bg-queue-completed/10 border-queue-completed/30' : 'bg-queue-failed/10 border-queue-failed/30'">
+                    <div class="w-2 h-2 rounded-full animate-pulse"
+                         :class="stats.isRunning ? 'bg-queue-completed' : 'bg-queue-failed'"></div>
+                    <span class="text-xs font-semibold"
+                          :class="stats.isRunning ? 'text-queue-completed' : 'text-queue-failed'"
+                          x-text="stats.isRunning ? 'ONLINE' : 'OFFLINE'"></span>
+                </div>
+            </div>
+        </header>
+        <main class="flex-1 overflow-auto p-5">
+            <div x-show="currentPage === 'dashboard'" class="space-y-6">
+                <div class="metric-card p-5 border border-queue-completed/30 bg-gradient-to-br from-dark-card to-dark-panel">
+                    <div class="flex items-center mb-4">
+                        <i class="icon-check-circle text-queue-completed mr-2 text-xl"></i>
+                        <h3 class="font-semibold text-white text-sm uppercase tracking-wide">Successful Uploads</h3>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-primary/20 hover:border-queue-primary/40 transition-all group cursor-pointer">
+                            <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
+                                <i class="icon-trending-up mr-1.5 text-queue-accent group-hover:scale-110 transition-transform"></i>
+                                Uploads/Minute
+                            </div>
+                            <div class="text-4xl font-bold bg-gradient-to-r from-queue-primary to-queue-accent bg-clip-text text-transparent" x-text="animatedStats.uploadsPerMin">0</div>
+                        </div>
+                        <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-primary/20 hover:border-queue-primary/40 transition-all group cursor-pointer">
+                            <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
+                                <i class="icon-circle-check mr-1.5 text-queue-primary group-hover:scale-110 transition-transform"></i>
+                                Total Success
+                            </div>
+                            <div class="text-4xl font-bold bg-gradient-to-r from-queue-primary to-queue-accent bg-clip-text text-transparent" x-text="animatedStats.totalSucceeded.toLocaleString()">0</div>
+                        </div>
+                        <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-completed/30 hover:border-queue-completed/50 transition-all group cursor-pointer">
+                            <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
+                                <i class="icon-target mr-1.5 text-queue-completed group-hover:scale-110 transition-transform"></i>
+                                Success Rate
+                            </div>
+                            <div class="flex items-center justify-center">
+                                <div class="text-4xl font-bold text-queue-completed" x-text="animatedStats.successRate.toFixed(1) + '%'">0%</div>
+                                <i class="icon-badge-check ml-2 text-queue-completed text-2xl group-hover:rotate-12 transition-transform"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="metric-card p-5 relative">
+                    <div class="flex justify-between items-center mb-2">
+                        <div>
+                            <h4 class="font-semibold text-white text-sm uppercase tracking-wide">Processing Train</h4>
+                            <p class="text-xs text-gray-500 mt-1">Real-time upload pipeline visualization</p>
+                        </div>
+                        <div class="text-xs text-gray-400">
+                            Capacity: <span class="text-queue-primary font-semibold text-base" x-text="stats.maxConcurrent"></span> slots
+                        </div>
+                    </div>
+                    <div class="train-container relative" x-ref="trainContainer">
+                        <div class="train-track"></div>
+                        <div class="wagon p-2 pb-3 flex flex-col items-center justify-between w-[7rem] h-[7rem] relative"
+                             style="background: linear-gradient(145deg, #1e3a8a, #1e40af); border: 1px solid #3b82f6; border-radius: 0.5rem; overflow: hidden;">
+                            <div class="wagon-label text-blue-300">ENGINE</div>
+                            <div id="bg_glow"></div>
+                            <div id="overlay"></div>
+                            <canvas id="canvas"></canvas>
+                            <div class="flex flex-col justify-center items-center w-full flex-1 relative pt-4" style="z-index: 10;">
+                                <img src="https://brand-kit.derad.net/derad-network-brand-kit/icon-outlines/white.png" alt="DeRadar" class="w-12 h-12 object-contain">
+                            </div>
+                            <div class="w-full relative z-10">
+                                <div class="text-[0.65rem] text-gray-300 mb-0.5 flex justify-between items-center">
+                                    <span>Power:</span>
+                                    <span :class="stats.isRunning ? 'text-queue-completed font-bold' : 'text-queue-failed font-bold'"
+                                          x-text="stats.isRunning ? 'ON' : 'OFF'"></span>
+                                </div>
+                                <div class="progress-bar h-1.5">
+                                    <div class="progress-fill"
+                                         :class="stats.isRunning ? 'bg-queue-completed' : 'bg-queue-failed'"
+                                         :style="`width: ${stats.isRunning ? 100 : 0}%`"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <template x-for="(wagon, index) in waitingWagons" :key="'waiting-' + wagon.id">
+                            <>
+                                <div class="wagon wagon-waiting p-2 pb-3 flex flex-col items-center justify-between w-[7rem] h-[7rem] relative"
+                                     :class="{
+                                         'queued': wagon.type === 'queued',
+                                         'empty': wagon.type === 'empty',
+                                         'more': wagon.type === 'more',
+                                         'overflow': wagon.type === 'overflow'
+                                     }">
+                                    <div class="wagon-label font-semibold"
+                                         :class="{
+                                             'text-white': wagon.type !== 'empty',
+                                             'text-gray-500': wagon.type === 'empty'
+                                         }"
+                                         :style="wagon.type !== 'empty' && wagon.type !== 'overflow' ? 'background: rgba(55, 65, 81, 0.9);' : wagon.type === 'overflow' ? 'background: rgba(153, 27, 27, 0.9);' : ''">
+                                        <span x-text="wagon.type === 'empty' ? 'EMPTY' : wagon.type === 'more' ? 'MORE' : wagon.type === 'overflow' ? 'OVERFLOW' : 'QUEUE'"></span>
+                                    </div>
+                                    <div class="text-center flex flex-col justify-center items-center w-full flex-1 pt-7 pb-2">
+                                        <div class="wagon-title font-bold text-xs leading-none w-full"
+                                             style="text-align: center !important;"
+                                             :class="{
+                                                 'text-white': wagon.type !== 'empty',
+                                                 'text-gray-500': wagon.type === 'empty',
+                                                 'text-[0.625rem]': wagon.title && wagon.title.length > 10
+                                             }"
+                                             x-text="wagon.title"></div>
+                                        <div class="wagon-subtitle mt-0.5 text-[0.625rem] leading-none w-full"
+                                             style="text-align: center !important;"
+                                             :class="{
+                                                 'text-gray-100': wagon.type !== 'empty',
+                                                 'text-gray-600': wagon.type === 'empty'
+                                             }"
+                                             x-text="wagon.subtitle"></div>
+                                    </div>
+                                    <div class="w-full">
+                                        <div class="text-[0.65rem] mb-0.5 flex justify-between items-center"
+                                             :class="{
+                                                 'text-white': wagon.type !== 'empty',
+                                                 'text-gray-500': wagon.type === 'empty'
+                                             }">
+                                            <span x-text="wagon.statusText"></span>
+                                            <span class="font-bold px-1 py-0.5 rounded bg-gray-700 text-[0.65rem]"
+                                                  x-show="wagon.type === 'queued'"
+                                                  x-text="wagon.waitTime"></span>
+                                        </div>
+                                        <div class="progress-bar h-1.5"
+                                             :class="{
+                                                 'bg-gray-600': wagon.type !== 'empty' && wagon.type !== 'overflow',
+                                                 'bg-gray-800': wagon.type === 'empty',
+                                                 'bg-orange-900': wagon.type === 'overflow'
+                                             }">
+                                            <div class="progress-fill transition-all duration-500"
+                                                 :class="{
+                                                     'bg-white': wagon.type !== 'overflow',
+                                                     'bg-orange-400 animate-pulse': wagon.type === 'overflow'
+                                                 }"
+                                                 :style="`width: ${wagon.progress}%`"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        </template>
+                        <div class="wagon-connector" x-show="waitingWagons.length > 0 && slotWagons.length > 0"></div>
+                        <template x-for="(wagon, index) in slotWagons" :key="'slot-' + wagon.id">
+                            <>
+                                <div class="wagon wagon-slot p-2 pb-3 flex flex-col items-center justify-between w-[7rem] h-[7rem] relative"
+                                     :class="{
+                                         'occupied': wagon.isOccupied,
+                                         'completed-blink': wagon.isCompleted,
+                                         'wagon-glow-slot': !wagon.isOccupied,
+                                         'wagon-glow-active': wagon.isOccupied
+                                     }">
+                                    <div class="wagon-label" :class="wagon.isOccupied ? 'text-queue-upload' : 'text-queue-slot'">
+                                        <span x-text="wagon.isOccupied ? 'ACTIVE' : 'SLOT'"></span>
+                                    </div>
+                                    <div class="text-center flex flex-col justify-center items-center w-full flex-1 pt-7 pb-2">
+                                        <div class="text-xs font-bold text-white leading-none w-full" style="text-align: center !important;" x-text="wagon.title"></div>
+                                        <div class="text-[0.625rem] mt-0.5 leading-none w-full" style="text-align: center !important;" :class="wagon.isOccupied ? 'text-green-300' : 'text-gray-400'" x-text="wagon.subtitle"></div>
+                                    </div>
+                                    <div class="w-full">
+                                        <div class="text-[0.65rem] mb-0.5" :class="wagon.isOccupied ? 'text-green-200' : 'text-gray-400'">
+                                            <span x-text="wagon.statusText"></span>
+                                        </div>
+                                        <div class="progress-bar h-1.5">
+                                            <div class="progress-fill transition-all duration-500"
+                                                 :class="wagon.isOccupied ? 'bg-queue-upload' : 'bg-gray-600'"
+                                                 :style="`width: ${wagon.isOccupied ? wagon.progress : 0}%`"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        </template>
+                        <div class="wagon-connector" x-show="slotWagons.length > 0 && successWagons.length > 0"></div>
+                        <template x-for="(wagon, index) in successWagons" :key="wagon.uploadId">
+                            <>
+                                <div class="wagon wagon-success p-2 pb-3 flex flex-col items-center justify-between w-[7rem] h-[7rem] relative"
+                                     :class="{'wagon-new-arrival': wagon.isNew}">
+                                    <div class="scanner-beam"></div>
+                                    <div class="data-stream"></div>
+                                    <div class="wagon-label text-purple-200">SUCCESS</div>
+                                    <div class="relative z-20 flex flex-col justify-center items-center w-full flex-1 py-2" style="text-align: center;">
+                                        <div class="text-xs font-bold text-white leading-none" style="margin: 0 auto;" x-text="wagon.title"></div>
+                                        <div class="text-[0.625rem] text-purple-200 mt-0.5 leading-none" style="margin: 0 auto;" x-text="wagon.subtitle"></div>
+                                    </div>
+                                    <div class="w-full relative z-20">
+                                        <div class="text-[0.65rem] text-purple-200 mb-0.5 flex justify-between items-center">
+                                            <span x-text="wagon.statusText"></span>
+                                            <span class="font-bold text-sm">✓</span>
+                                        </div>
+                                        <div class="progress-bar h-1.5">
+                                            <div class="progress-fill bg-gradient-to-r from-purple-500 to-purple-400 transition-all duration-500"
+                                                 :style="`width: ${wagon.progress}%`"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        </template>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="metric-card p-4 border border-queue-slot/30">
+                        <div class="flex justify-between items-center mb-2">
+                            <div class="flex items-center">
+                                <i class="icon-square text-queue-slot mr-2 text-sm"></i>
+                                <span class="text-gray-400 text-xs has-tooltip">
+                                    Upload Workers
+                                    <div class="tooltip">
+                                        5 concurrent upload slots (workers) available. Like 5 checkout lanes - all can process uploads simultaneously. When all slots busy, new uploads wait in queue.
+                                    </div>
+                                </span>
+                            </div>
+                            <span class="text-sm font-bold">
+                                <span class="text-queue-secondary" x-text="stats.occupiedSlots"></span>
+                                <span class="text-gray-500"> / </span>
+                                <span class="text-queue-primary" x-text="stats.maxConcurrent"></span>
+                            </span>
+                        </div>
+                        <div class="progress-bar h-2.5">
+                            <div class="progress-fill bg-gradient-to-r from-queue-slot to-queue-primary"
+                                 :style="`width: ${(stats.maxConcurrent > 0 ? stats.occupiedSlots / stats.maxConcurrent : 0) * 100}%`"></div>
+                        </div>
+                        <div class="mt-1.5 text-xs text-gray-500">
+                            <span x-text="stats.availableSlots"></span> slots available
+                        </div>
+                    </div>
+                    <div class="metric-card p-4 border border-queue-waiting/30">
+                        <div class="flex justify-between items-center mb-2">
+                            <div class="flex items-center">
+                                <i class="icon-clock text-queue-waiting mr-2 text-sm"></i>
+                                <span class="text-gray-400 text-xs has-tooltip">
+                                    Queue Backlog
+                                    <div class="tooltip">
+                                        Aircraft batches waiting to be uploaded. When all 5 workers are busy, new batches wait here. Each batch contains up to 30 aircraft.
+                                    </div>
+                                </span>
+                            </div>
+                            <span class="text-sm font-bold text-queue-waiting" x-text="stats.waitingItems">0</span>
+                        </div>
+                        <div class="progress-bar h-2.5">
+                            <div class="progress-fill bg-gradient-to-r from-queue-waiting to-purple-400 animate-pulse"
+                                 :style="`width: ${Math.min(100, stats.waitingItems * 20)}%`"></div>
+                        </div>
+                        <div class="mt-1.5 text-xs text-gray-500">
+                            Items waiting for available slots
+                        </div>
+                    </div>
+                    <div class="metric-card p-4 border border-queue-upload/30">
+                        <div class="flex justify-between items-center mb-2">
+                            <div class="flex items-center">
+                                <i class="icon-upload text-queue-upload mr-2 text-sm"></i>
+                                <span class="text-gray-400 text-xs has-tooltip">
+                                    Uploads In Progress
+                                    <div class="tooltip">
+                                        Number of workers currently uploading to Arweave blockchain. Each upload takes 3-5 seconds. Maximum 5 concurrent uploads.
+                                    </div>
+                                </span>
+                            </div>
+                            <span class="text-sm font-bold text-queue-upload" x-text="stats.activeUploads">0</span>
+                        </div>
+                        <div class="progress-bar h-2.5">
+                            <div class="progress-fill bg-gradient-to-r from-queue-upload to-green-300"
+                                 :style="`width: ${Math.min(100, stats.activeUploads * 20)}%`"></div>
+                        </div>
+                        <div class="mt-1.5 text-xs text-gray-500">
+                            Currently uploading to Arweave via Ardrive Turbo
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                    <div class="stat-card bg-dark-card border border-dark-border p-5 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-gray-400 text-sm flex items-center">
+                                    <i class="icon-plane mr-2 text-blue-400"></i>
+                                    <span class="has-tooltip">
+                                        Unique Aircraft
+                                        <div class="tooltip">
+                                            Total number of unique aircraft ever detected (by hex ID). This counts each physical aircraft only once, even if it appears multiple times.
+                                        </div>
+                                    </span>
+                                </div>
+                                <div class="text-2xl font-bold mt-1 text-white" x-text="animatedStats.totalTracked.toLocaleString()">0</div>
+                            </div>
+                            <svg class="w-12 h-12" viewBox="0 0 36 36">
+                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                      fill="none" stroke="#1a1a1c" stroke-width="3"></path>
+                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                      fill="none" stroke="#60a5fa" stroke-width="3" stroke-dasharray="100"
+                                      class="progress-ring"
+                                      :style="`stroke-dashoffset: ${100 - Math.min(100, stats.totalTracked/1000 * 100)}`"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="stat-card bg-dark-card border border-dark-border p-5 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-gray-400 text-sm flex items-center">
+                                    <i class="icon-activity mr-2 text-green-400"></i>
+                                    <span class="has-tooltip">
+                                        Currently Flying
+                                        <div class="tooltip">
+                                            Aircraft active in the live feed right now. Updated every 500ms from radar data. Changes as aircraft take off and land.
+                                        </div>
+                                    </span>
+                                </div>
+                                <div class="text-2xl font-bold mt-1 text-white" x-text="animatedStats.currentlyActive.toLocaleString()">0</div>
+                            </div>
+                            <svg class="w-12 h-12" viewBox="0 0 36 36">
+                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                      fill="none" stroke="#1a1a1c" stroke-width="3"></path>
+                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                      fill="none" stroke="#34d399" stroke-width="3" stroke-dasharray="100, 100"
+                                      class="progress-ring"
+                                      :style="`stroke-dashoffset: ${100 - (stats.totalTracked > 0 ? (stats.currentlyActive / stats.totalTracked) * 100 : 0)}`"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="stat-card bg-dark-card border border-dark-border p-5 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-gray-400 text-sm flex items-center">
+                                    <i class="icon-clock mr-2 text-purple-400"></i>
+                                    <span class="has-tooltip">
+                                        System Uptime
+                                        <div class="tooltip">
+                                            Time since tracking started. Resets when Docker restarts or "Stop Tracking" clicked.
+                                        </div>
+                                    </span>
+                                </div>
+                                <div class="text-2xl font-bold mt-1 text-white" x-text="stats.uptime">--</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-gray-400 text-xs flex items-center justify-end">
+                                    <span class="has-tooltip">
+                                        Total Polls
+                                        <div class="tooltip">
+                                            Number of times we checked aircraft.json. At 500ms intervals = 2 checks per second. Example: 1 minute = 120 checks.
+                                        </div>
+                                    </span>
+                                </div>
+                                <div class="text-lg font-bold text-purple-400" x-text="animatedStats.totalPollCycles.toLocaleString()">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-card bg-dark-card border border-dark-border p-5 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-gray-400 text-sm flex items-center">
+                                    <i class="icon-zap mr-2 text-yellow-400"></i>
+                                    <span class="has-tooltip">
+                                        Polls/Min
+                                        <div class="tooltip">
+                                            Radar polling rate - how many times per minute we check aircraft.json. At 500ms intervals = 120 polls/min. Higher = faster data refresh.
+                                        </div>
+                                    </span>
+                                </div>
+                                <div class="text-2xl font-bold mt-1 text-white" x-text="animatedStats.pollsPerMin">0</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-gray-400 text-xs flex items-center justify-end">
+                                    <span class="has-tooltip">
+                                        Memory Cache
+                                        <div class="tooltip">
+                                            Aircraft stored in RAM for fast lookups. Used to detect position changes. Cleared on restart.
+                                        </div>
+                                    </span>
+                                </div>
+                                <div class="text-lg font-bold text-yellow-400" x-text="stats.inCache.toLocaleString()">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                    <div class="bg-dark-card border border-dark-border p-5 rounded-lg">
+                        <div class="flex items-center mb-4">
+                            <i class="icon-cloud-upload text-queue-primary mr-2"></i>
+                            <h3 class="font-bold text-white">Upload Statistics</h3>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="flex justify-between">
+                                <span class="text-gray-400 text-sm">Total Attempts</span>
+                                <span class="font-medium text-white" x-text="animatedStats.totalAttempts.toLocaleString()">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400 text-sm">Succeeded</span>
+                                <span class="font-medium text-queue-completed" x-text="stats.totalSucceeded.toLocaleString()">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400 text-sm">Failed</span>
+                                <span class="font-medium text-queue-failed" x-text="animatedStats.totalFailed.toLocaleString()">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400 text-sm">Retries</span>
+                                <span class="font-medium text-queue-pending" x-text="animatedStats.totalRetries.toLocaleString()">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-dark-card border border-dark-border p-5 rounded-lg">
+                        <div class="flex items-center mb-4">
+                            <i class="icon-radar text-queue-completed mr-2"></i>
+                            <h3 class="font-bold text-white has-tooltip">
+                                Radar Detections
+                                <div class="tooltip">
+                                    Tracks how many times aircraft appear/change in radar coverage. NOT the number of unique aircraft! Same aircraft can be detected multiple times.
+                                </div>
+                            </h3>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="flex justify-between">
+                                <span class="text-gray-400 text-sm has-tooltip">
+                                    New Detections
+                                    <div class="tooltip">
+                                        Times an aircraft appeared that wasn't in the previous check. Includes: first-time aircraft, aircraft re-entering coverage. Same plane counted multiple times if it leaves/returns.
+                                    </div>
+                                </span>
+                                <span class="font-medium text-blue-400" x-text="animatedStats.totalNew.toLocaleString()">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400 text-sm has-tooltip">
+                                    Position Updates
+                                    <div class="tooltip">
+                                        Times we detected an aircraft moved/changed. Includes: position, altitude, speed, heading changes. Most frequent type of detection.
+                                    </div>
+                                </span>
+                                <span class="font-medium text-queue-pending" x-text="animatedStats.totalUpdates.toLocaleString()">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400 text-sm has-tooltip">
+                                    Reappeared
+                                    <div class="tooltip">
+                                        Aircraft that disappeared >5min and came back. Example: Plane landed, refueled, took off again. Less common than new detections.
+                                    </div>
+                                </span>
+                                <span class="font-medium text-purple-400" x-text="animatedStats.totalReappeared.toLocaleString()">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-dark-card border border-dark-border p-5 rounded-lg flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center">
+                                <i class="icon-list text-gray-400 mr-2"></i>
+                                <h3 class="font-bold text-white">Activity Log</h3>
+                            </div>
+                        </div>
+                        <div class="activity-log flex-1 overflow-y-auto space-y-2 max-h-60">
+                            <template x-for="(log, index) in activityLog" :key="index">
+                                <div class="flex items-start p-3 bg-dark-panel rounded hover:bg-dark-hover transition-colors group">
+                                    <div class="mr-3 flex-shrink-0 mt-0.5">
+                                        <i class="text-sm"
+                                           :class="{
+                                               'icon-check-circle text-queue-completed': log.type === 'success',
+                                               'icon-info text-blue-500': log.type === 'info',
+                                               'icon-circle-x text-queue-failed': log.type === 'error',
+                                               'icon-triangle-alert text-queue-pending': log.type === 'warning',
+                                               'icon-clock text-queue-waiting': log.type === 'waiting'
+                                           }"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="text-white text-sm" x-text="log.message"></div>
+                                        <div class="text-gray-500 text-xs mt-1 flex items-center">
+                                            <i class="icon-clock mr-1" style="width: 0.75rem; height: 0.75rem;"></i>
+                                            <span x-text="log.time"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="activityLog.length === 0" class="text-center py-6 text-gray-500">
+                                <i class="icon-activity text-xl mb-2 opacity-50"></i>
+                                <div class="text-sm">No activity yet</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div x-show="currentPage === 'archive'" class="h-full">
+                <div class="bg-dark-card border border-dark-border rounded-lg h-full">
+                    <iframe src="/archive/all" class="w-full h-full bg-dark-bg" frameborder="0"></iframe>
+                </div>
+            </div>
+            <div x-show="currentPage === 'api'" class="h-full">
+                <div class="bg-dark-card border border-dark-border rounded-lg h-full">
+                    <iframe src="/doc" class="w-full h-full bg-dark-bg" frameborder="0"></iframe>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        function dashboard() {
+            return {
+                currentPage: 'dashboard',
+                autoRefresh: true,
+                stats: {
+                    isRunning: false,
+                    totalTracked: 0,
+                    currentlyActive: 0,
+                    queueSize: 0,
+                    activeUploads: 0,
+                    maxConcurrent: 5,
+                    successRate: 0,
+                    uptime: '--',
+                    totalPollCycles: 0,
+                    pollsPerMin: 0,
+                    inCache: 0,
+                    totalAttempts: 0,
+                    totalSucceeded: 0,
+                    totalFailed: 0,
+                    uploadsPerMin: 0,
+                    totalNew: 0,
+                    totalUpdates: 0,
+                    totalReappeared: 0,
+                    totalRetries: 0,
+                    availableSlots: 5,
+                    occupiedSlots: 0,
+                    waitingItems: 0
+                },
+                activityLog: [],
+                intervals: [],
+                socket: null,
+                lastSuccessCount: 0,
+                newSuccessIds: new Set(),
+                successTimestamps: new Map(), 
+                uploadProgressData: [], 
+                uploadCompletionTimes: [], 
+                uploadStartTimes: new Map(), 
+                lastCleanupTime: Date.now(), 
+
+                animatedStats: {
+                    totalTracked: 0,
+                    currentlyActive: 0,
+                    totalAttempts: 0,
+                    totalSucceeded: 0,
+                    totalFailed: 0,
+                    totalNew: 0,
+                    totalUpdates: 0,
+                    totalReappeared: 0,
+                    totalRetries: 0,
+                    totalPollCycles: 0,
+                    inCache: 0,
+                    queueSize: 0,
+                    activeUploads: 0,
+                    waitingItems: 0,
+                    uploadsPerMin: 0,
+                    pollsPerMin: 0,
+                    successRate: 0
+                },
+
+                activeAnimations: {},
+
+                lastRateUpdate: 0,
+                rateUpdateInterval: 3000, 
+                navigation: [
+                    { id: 'dashboard', name: 'Queue Control', icon: 'icon-layout-dashboard' },
+                    { id: 'archive', name: 'Data Archive', icon: 'icon-database' },
+                    { id: 'api', name: 'API Docs', icon: 'icon-code' }
+                ],
+                get currentPageName() {
+                    const page = this.navigation.find(item => item.id === this.currentPage);
+                    return page ? page.name : 'Dashboard';
+                },
+                get slotWagons() {
+                    const wagons = [];
+                    for (let i = 1; i <= this.stats.maxConcurrent; i++) {
+
+                        const progressInfo = this.uploadProgressData.find(p => p.slot_id === i);
+
+                        const isOccupied = (i <= this.stats.occupiedSlots) && (progressInfo || i <= this.stats.activeUploads);
+                        let actualProgress = 0;
+                        let statusText = 'Ready';
+
+                        if (isOccupied && progressInfo) {
+
+                            const baseProgress = progressInfo.progress;
+                            const elapsedMs = progressInfo.elapsed_ms || 0;
+                            const status = progressInfo.status;
+
+                            const ESTIMATED_TOTAL_MS = 4000;
+                            if (status === 'uploading') {
+
+                                const timeProgress = Math.min(95, (elapsedMs / ESTIMATED_TOTAL_MS) * 100);
+
+                                actualProgress = Math.max(baseProgress, Math.floor(timeProgress));
+                                statusText = actualProgress + '%';
+                            } else if (status === 'retrying') {
+                                actualProgress = baseProgress;
+                                statusText = 'Retry';
+                            } else if (status === 'completed') {
+                                actualProgress = 100;
+                                statusText = 'Done';
+                            } else {
+                                actualProgress = baseProgress;
+                                statusText = baseProgress + '%';
+                            }
+                        } else if (isOccupied && !progressInfo) {
+
+                            actualProgress = 5;
+                            statusText = 'Starting';
+                        } else {
+
+                            actualProgress = 0;
+                            statusText = 'Ready';
+                        }
+                        wagons.push({
+                            id: i,
+                            icon: isOccupied ? 'icon-upload' : 'icon-square',
+                            color: isOccupied ? '#10b981' : '#93c5fd',
+                            title: 'Slot ' + i,
+                            subtitle: isOccupied ? 'Processing' : 'Available',
+                            statusText: statusText,
+                            progress: actualProgress,
+                            isOccupied: isOccupied
+                        });
+                    }
+                    return wagons;
+                },
+                get waitingWagons() {
+                    const wagons = [];
+                    const totalWaiting = this.stats.waitingItems || 0;
+                    const avgUploadTimeSeconds = this.getAverageUploadTime();
+                    const activeSlots = this.stats.activeUploads || 0;
+                    const availableSlots = Math.max(1, this.stats.maxConcurrent - activeSlots);
+
+                    if (totalWaiting === 0) {
+
+                        wagons.push({
+                            id: 'empty-queue',
+                            icon: 'icon-inbox',
+                            color: 'rgba(156, 163, 175, 0.3)',
+                            title: 'Empty',
+                            subtitle: 'No queue',
+                            statusText: 'Available',
+                            waitTime: '-',
+                            progress: 0,
+                            type: 'empty'
+                        });
+                    } else if (totalWaiting >= 1 && totalWaiting <= 10) {
+
+                        const estimatedWaitSeconds = this.calculateRealisticWaitTime(1, avgUploadTimeSeconds, availableSlots, activeSlots);
+                        const seconds = Math.max(1, estimatedWaitSeconds);
+                        const waitTimeDisplay = (seconds % 1 === 0 ? seconds : seconds.toFixed(1)) + 's';
+                        wagons.push({
+                            id: 'queue-count',
+                            icon: 'icon-clock',
+                            color: 'rgba(156, 163, 175, 0.5)',
+                            title: totalWaiting.toString(),
+                            subtitle: totalWaiting === 1 ? 'item' : 'items',
+                            statusText: 'In queue',
+                            waitTime: waitTimeDisplay,
+                            progress: Math.min(95, totalWaiting * 10),
+                            type: 'queued'
+                        });
+                    } else if (totalWaiting > 10) {
+
+                        wagons.push({
+                            id: 'queue-overflow',
+                            icon: 'icon-layers',
+                            color: '#fb923c',
+                            title: '+' + totalWaiting,
+                            subtitle: 'items',
+                            statusText: 'Overflow',
+                            waitTime: '',
+                            progress: 100,
+                            type: 'overflow',
+                            overflowCount: totalWaiting
+                        });
+                    }
+                    return wagons;
+                },
+                get successWagons() {
+                    const wagons = [];
+                    const maxSuccessWagons = Math.min(5, this.stats.totalSucceeded);
+                    const now = Date.now();
+
+                    let newWagonIndex = 0;
+                    for (let i = 1; i <= maxSuccessWagons; i++) {
+                        const uploadId = this.stats.totalSucceeded - i + 1;
+
+                        const shouldAnimate = this.newSuccessIds.has(uploadId);
+
+                        if (!this.successTimestamps.has(uploadId)) {
+
+                            const estimatedSecondsAgo = (i - 1) * 2; 
+                            this.successTimestamps.set(uploadId, now - (estimatedSecondsAgo * 1000));
+                        }
+
+                        let timeAgo = 'Just now';
+                        const wagonTimestamp = this.successTimestamps.get(uploadId);
+                        if (wagonTimestamp) {
+                            const secondsAgo = Math.floor((now - wagonTimestamp) / 1000);
+
+                            if (secondsAgo < 60) {
+                                timeAgo = secondsAgo === 0 ? 'Just now' : secondsAgo + 's ago';
+                            } else if (secondsAgo < 3600) {
+                                const minutes = Math.floor(secondsAgo / 60);
+                                timeAgo = minutes + 'm ago';
+                            } else {
+                                const hours = Math.floor(secondsAgo / 3600);
+                                timeAgo = hours + 'h ago';
+                            }
+                        }
+                        wagons.push({
+                            id: 'success-' + uploadId,
+                            uploadId: uploadId,
+                            icon: 'icon-check-circle',
+                            color: '#c4b5fd',
+                            title: 'Upload #' + uploadId,
+                            subtitle: timeAgo,
+                            statusText: 'Complete',
+                            progress: 100,
+                            isNew: shouldAnimate,
+                            animationIndex: shouldAnimate ? newWagonIndex++ : -1
+                        });
+                    }
+                    return wagons;
+                },
+                trackNewSuccesses() {
+
+                    if (this.stats.totalSucceeded > this.lastSuccessCount) {
+                        const newCount = this.stats.totalSucceeded - this.lastSuccessCount;
+                        const now = Date.now();
+
+                        for (let i = 0; i < newCount; i++) {
+                            const newId = this.stats.totalSucceeded - i;
+                            this.newSuccessIds.add(newId);
+
+                            this.successTimestamps.set(newId, now);
+
+                            setTimeout(() => {
+                                this.newSuccessIds.delete(newId);
+                            }, 800);
+                        }
+                        this.lastSuccessCount = this.stats.totalSucceeded;
+                    }
+                },
+                getAverageUploadTime() {
+                    if (this.uploadCompletionTimes.length === 0) {
+                        return 2;
+                    }
+                    const recentCompletions = this.uploadCompletionTimes.slice(-20);
+                    const sum = recentCompletions.reduce((acc, time) => acc + time, 0);
+                    const avg = sum / recentCompletions.length;
+                    return Math.max(1, Math.min(60, avg));
+                },
+                calculateRealisticWaitTime(position, avgUploadTime, availableSlots, activeSlots) {
+                    const waitTime = 1 + ((position - 1) * 0.3);
+                    return Math.max(1, waitTime);
+                },
+                trackUploadStart(slotId) {
+                    this.uploadStartTimes.set(slotId, Date.now());
+                },
+                trackUploadCompletion(slotId) {
+                    const startTime = this.uploadStartTimes.get(slotId);
+                    if (startTime) {
+                        const duration = (Date.now() - startTime) / 1000;
+                        this.uploadCompletionTimes.push(duration);
+                        if (this.uploadCompletionTimes.length > 50) {
+                            this.uploadCompletionTimes.shift();
+                        }
+                        this.uploadStartTimes.delete(slotId);
+                    }
+                },
+                cleanupMemory() {
+
+                    const now = Date.now();
+
+                    if (now - this.lastCleanupTime < 30000) {
+                        return;
+                    }
+                    this.lastCleanupTime = now;
+
+                    if (this.successTimestamps.size > 100) {
+                        const sortedKeys = Array.from(this.successTimestamps.keys()).sort((a, b) => b - a);
+                        const keysToKeep = sortedKeys.slice(0, 100);
+                        const keysToDelete = sortedKeys.slice(100);
+                        keysToDelete.forEach(key => {
+                            this.successTimestamps.delete(key);
+                        });
+                        console.log(`🧹 Memory cleanup: Removed ${keysToDelete.length} old timestamp entries`);
+                    }
+
+                    let cleanedAnimations = 0;
+                    Object.keys(this.activeAnimations).forEach(key => {
+                        if (this.activeAnimations[key] === null) {
+                            delete this.activeAnimations[key];
+                            cleanedAnimations++;
+                        }
+                    });
+                    if (cleanedAnimations > 0) {
+                        console.log(`🧹 Memory cleanup: Removed ${cleanedAnimations} completed animations`);
+                    }
+
+                    if (this.activityLog.length > 15) {
+                        this.activityLog = this.activityLog.slice(0, 15);
+                        console.log('🧹 Memory cleanup: Trimmed activity log');
+                    }
+
+                    if (this.uploadProgressData.length > 10) {
+                        this.uploadProgressData = this.uploadProgressData.filter(p =>
+                            p.status !== 'completed' || p.elapsed_ms < 5000
+                        );
+                        console.log(`🧹 Memory cleanup: Cleaned upload progress data`);
+                    }
+
+                    console.log(`📊 Memory stats: successTimestamps=${this.successTimestamps.size}, activeAnimations=${Object.keys(this.activeAnimations).length}, activityLog=${this.activityLog.length}`);
+                },
+                checkAuth(response, data) {
+
+                    const is403 = response?.status === 403 ||
+                                  (data && data.statusCode === 403) ||
+                                  (data && data.error === 'Forbidden') ||
+                                  (data && data.message && data.message.includes('Forbidden'));
+                    if (is403) {
+                        console.log('403 Forbidden detected, redirecting to login...');
+                        window.location.href = '/auth/login';
+                        return false;
+                    }
+                    return true;
+                },
+                animateNumber(key, targetValue, isDecimal = false, skipAnimation = false) {
+
+                    if (this.activeAnimations[key]) {
+                        cancelAnimationFrame(this.activeAnimations[key]);
+                        this.activeAnimations[key] = null;
+                    }
+
+                    if (skipAnimation) {
+                        this.animatedStats[key] = targetValue;
+                        return;
+                    }
+
+                    const currentValue = this.animatedStats[key] || 0;
+                    const diff = targetValue - currentValue;
+
+                    const threshold = isDecimal ? 0.01 : 1;
+                    if (Math.abs(diff) <= threshold) {
+                        this.animatedStats[key] = targetValue;
+                        return;
+                    }
+
+                    const duration = 600; 
+                    const startValue = currentValue;
+                    const startTime = Date.now();
+                    const animate = () => {
+                        const elapsed = Date.now() - startTime;
+                        const progress = Math.min(elapsed / duration, 1);
+
+                        const easeProgress = 1 - Math.pow(1 - progress, 3);
+                        const newValue = startValue + (diff * easeProgress);
+                        this.animatedStats[key] = isDecimal ? Math.round(newValue * 100) / 100 : Math.round(newValue);
+                        if (progress < 1) {
+                            this.activeAnimations[key] = requestAnimationFrame(animate);
+                        } else {
+                            this.animatedStats[key] = targetValue; 
+                            this.activeAnimations[key] = null;
+                        }
+                    };
+                    this.activeAnimations[key] = requestAnimationFrame(animate);
+                },
+                async fetchStats(isInitialLoad = false) {
+                    try {
+                        const response = await fetch('/archive/tracking/stats');
+
+                        if (response.status === 403) {
+                            console.log('403 Forbidden - redirecting to login...');
+                            window.location.href = '/auth/login';
+                            return;
+                        }
+                        const data = await response.json();
+
+                        if (!this.checkAuth(response, data)) return;
+                        if (data.success) {
+
+                            this.updateStats(data.stats, isInitialLoad);
+                        }
+                    } catch (error) {
+                        console.error('Stats fetch failed:', error);
+                        this.addLog('Failed to fetch stats: ' + error.message, 'error');
+                    }
+                },
+                async startTracking() {
+                    try {
+                        const res = await fetch('/archive/tracking/start', { method: 'POST' });
+
+                        if (res.status === 403) {
+                            console.log('403 Forbidden - redirecting to login...');
+                            window.location.href = '/auth/login';
+                            return;
+                        }
+                        const data = await res.json();
+
+                        if (!this.checkAuth(res, data)) return;
+                        if (data.success) {
+                            this.addLog('Tracking started successfully', 'success');
+                            this.stats.isRunning = true;
+                            this.fetchStats();
+                        } else {
+                            this.addLog('Failed to start tracking: ' + (data.message || 'Unknown error'), 'error');
+                        }
+                    } catch (error) {
+                        this.addLog('Start failed: ' + error.message, 'error');
+                    }
+                },
+                async stopTracking() {
+                    try {
+                        const res = await fetch('/archive/tracking/stop', { method: 'POST' });
+
+                        if (res.status === 403) {
+                            console.log('403 Forbidden - redirecting to login...');
+                            window.location.href = '/auth/login';
+                            return;
+                        }
+                        const data = await res.json();
+
+                        if (!this.checkAuth(res, data)) return;
+                        if (data.success) {
+                            this.addLog('Tracking stopped', 'warning');
+                            this.stats.isRunning = false;
+                            this.fetchStats();
+                        } else {
+                            this.addLog('Failed to stop tracking: ' + (data.message || 'Unknown error'), 'error');
+                        }
+                    } catch (error) {
+                        this.addLog('Stop failed: ' + error.message, 'error');
+                    }
+                },
+                toggleTracking() {
+                    if (this.stats.isRunning) {
+                        this.stopTracking();
+                    } else {
+                        this.startTracking();
+                    }
+                },
+                addLog(message, type = 'info') {
+                    this.activityLog.unshift({
+                        message,
+                        type,
+                        time: new Date().toLocaleTimeString()
+                    });
+                    if (this.activityLog.length > 15) {
+                        this.activityLog = this.activityLog.slice(0, 15);
+                    }
+                },
+                async logout() {
+                    try {
+                        await fetch('/auth/logout', { method: 'GET' });
+                        window.location.href = '/auth/login';
+                    } catch (error) {
+                        window.location.href = '/auth/login';
+                    }
+                },
+                scrollTrainToStart() {
+                    if (this.$refs.trainContainer) {
+                        this.$refs.trainContainer.scrollTo({
+                            left: 0,
+                            behavior: 'smooth'
+                        });
+                    }
+                },
+                scrollTrainToEnd() {
+                    if (this.$refs.trainContainer) {
+                        this.$refs.trainContainer.scrollTo({
+                            left: this.$refs.trainContainer.scrollWidth,
+                            behavior: 'smooth'
+                        });
+                    }
+                },
+                connectWebSocket() {
+
+                    this.socket = io('/stats', {
+                        transports: ['websocket', 'polling']
+                    });
+                    this.socket.on('connect', () => {
+                        this.addLog('WebSocket connected - real-time updates active', 'success');
+                    });
+                    this.socket.on('disconnect', () => {
+                        this.addLog('WebSocket disconnected - attempting reconnect...', 'warning');
+                    });
+                    this.socket.on('stats-update', (data) => {
+
+                        if (data && data.statusCode === 403) {
+                            window.location.href = '/auth/login';
+                            return;
+                        }
+                        if (data.success) {
+                            this.updateStats(data.stats);
+                        }
+                    });
+                    this.socket.on('error', (error) => {
+                        console.error('WebSocket error:', error);
+
+                        if (error && (error.statusCode === 403 || error.message?.includes('Forbidden'))) {
+                            window.location.href = '/auth/login';
+                            return;
+                        }
+                        this.addLog('WebSocket error: ' + error, 'error');
+                    });
+                },
+                updateStats(s, isInitialLoad = false) {
+
+                    this.stats = {
+                        isRunning: s.system.is_running,
+                        totalTracked: s.aircraft.total_tracked_all_time || 0,
+                        currentlyActive: s.aircraft.currently_active || 0,
+                        queueSize: s.queue.queue_size || 0,
+                        activeUploads: s.queue.active_uploads || 0,
+                        maxConcurrent: s.queue.max_concurrent || 5,
+                        successRate: s.uploads.success_rate_percent || 0,
+                        uptime: s.system.uptime_formatted || '--',
+                        totalPollCycles: s.system.total_poll_cycles || 0,
+                        pollsPerMin: s.performance.polls_per_minute || 0,
+                        inCache: s.aircraft.in_memory_cache || 0,
+                        totalAttempts: s.uploads.total_attempted || 0,
+                        totalSucceeded: s.uploads.total_succeeded || 0,
+                        totalFailed: s.uploads.total_failed || 0,
+                        uploadsPerMin: s.performance.uploads_per_minute || 0,
+                        totalNew: s.aircraft.total_new || 0,
+                        totalUpdates: s.aircraft.total_updates || 0,
+                        totalReappeared: s.aircraft.total_reappeared || 0,
+                        totalRetries: s.uploads.total_retries || 0,
+                        availableSlots: s.queue.available_slots || 0,
+                        occupiedSlots: s.queue.max_concurrent - s.queue.available_slots || 0,
+                        waitingItems: s.queue.queue_size || 0
+                    };
+
+                    this.animateNumber('totalTracked', this.stats.totalTracked, false, isInitialLoad);
+                    this.animateNumber('currentlyActive', this.stats.currentlyActive, false, isInitialLoad);
+                    this.animateNumber('totalAttempts', this.stats.totalAttempts, false, isInitialLoad);
+                    this.animateNumber('totalSucceeded', this.stats.totalSucceeded, false, isInitialLoad);
+                    this.animateNumber('totalFailed', this.stats.totalFailed, false, isInitialLoad);
+                    this.animateNumber('totalNew', this.stats.totalNew, false, isInitialLoad);
+                    this.animateNumber('totalUpdates', this.stats.totalUpdates, false, isInitialLoad);
+                    this.animateNumber('totalReappeared', this.stats.totalReappeared, false, isInitialLoad);
+                    this.animateNumber('totalRetries', this.stats.totalRetries, false, isInitialLoad);
+                    this.animateNumber('totalPollCycles', this.stats.totalPollCycles, false, isInitialLoad);
+                    this.animateNumber('inCache', this.stats.inCache, false, isInitialLoad);
+                    this.animateNumber('queueSize', this.stats.queueSize, false, isInitialLoad);
+                    this.animateNumber('activeUploads', this.stats.activeUploads, false, isInitialLoad);
+                    this.animateNumber('waitingItems', this.stats.waitingItems, false, isInitialLoad);
+
+                    const now = Date.now();
+                    if (isInitialLoad || (now - this.lastRateUpdate) >= this.rateUpdateInterval) {
+                        this.animateNumber('uploadsPerMin', parseFloat(this.stats.uploadsPerMin) || 0, true, isInitialLoad);
+                        this.animateNumber('pollsPerMin', parseFloat(this.stats.pollsPerMin) || 0, true, isInitialLoad);
+                        this.animateNumber('successRate', this.stats.successRate || 0, true, isInitialLoad);
+                        this.lastRateUpdate = now;
+                    }
+
+                    const previousProgress = this.uploadProgressData || [];
+                    this.uploadProgressData = s.queue.upload_progress || [];
+
+                    this.uploadProgressData.forEach(upload => {
+                        const previous = previousProgress.find(p => p.slot_id === upload.slot_id);
+                        if (!previous && upload.status === 'uploading') {
+                            this.trackUploadStart(upload.slot_id);
+                        }
+                        if (previous && previous.status !== 'completed' && upload.status === 'completed') {
+                            this.trackUploadCompletion(upload.slot_id);
+                        }
+                    });
+
+                    this.trackNewSuccesses();
+
+                    this.cleanupMemory();
+                },
+                cleanup() {
+
+                    Object.keys(this.activeAnimations).forEach(key => {
+                        if (this.activeAnimations[key]) {
+                            cancelAnimationFrame(this.activeAnimations[key]);
+                        }
+                    });
+                    this.activeAnimations = {};
+
+                    this.intervals.forEach(id => clearInterval(id));
+
+                    if (this.socket) {
+                        this.socket.disconnect();
+                    }
+
+                    this.successTimestamps.clear();
+                    this.newSuccessIds.clear();
+                    this.activityLog = [];
+                    this.uploadProgressData = [];
+                    console.log('🧹 Dashboard cleanup completed');
+                },
+                init() {
+
+                    this.fetchStats(true);
+                    this.addLog('Dashboard initialized', 'success');
+
+                    this.connectWebSocket();
+
+                    this.$watch('stats.isRunning', (value) => {
+                        window.engineAnimationRunning = value;
+                    });
+
+                    window.engineAnimationRunning = this.stats.isRunning;
+
+                    this.$watch('stats.queueSize', () => {
+                        this.updateEngineSpeed();
+                    });
+                    this.$watch('stats.waitingItems', () => {
+                        this.updateEngineSpeed();
+                    });
+
+                    this.updateEngineSpeed();
+
+                    window.addEventListener('beforeunload', () => this.cleanup());
+                },
+                updateEngineSpeed() {
+
+                    const queueSize = this.stats.queueSize || 0;
+                    const waitingItems = this.stats.waitingItems || 0;
+
+                    let speedMultiplier = 1.0;
+
+                    speedMultiplier += queueSize * 0.2;
+
+                    speedMultiplier += waitingItems * 0.3;
+
+                    speedMultiplier = Math.min(speedMultiplier, 5.0);
+
+                    if (queueSize === 0 && waitingItems === 0) {
+                        speedMultiplier = 0.8;
+                    }
+
+                    window.engineSpeedMultiplier = speedMultiplier;
+                }
+            }
+        }
+
+        function startDissolveAnimation(canvas) {
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+
+            const particles = [];
+            const particleCount = 60; 
+
+            for (let i = 0; i < particleCount; i++) {
+                particles.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    size: Math.random() * 3 + 2, 
+                    speedX: (Math.random() - 0.5) * 2, 
+                    speedY: -(Math.random() * 2 + 1), 
+                    rotation: Math.random() * 360,
+                    rotationSpeed: (Math.random() - 0.5) * 3,
+                    opacity: 0,
+                    maxOpacity: Math.random() * 0.7 + 0.3, 
+                    life: 0,
+                    maxLife: Math.random() * 100 + 100, 
+                    delay: Math.random() * 20, 
+                    color: i % 3 === 0 ? '#a78bfa' : (i % 3 === 1 ? '#8b5cf6' : '#c4b5fd')
+                });
+            }
+            let frame = 0;
+            const maxFrames = 200; 
+            function animate() {
+                if (frame >= maxFrames) return;
+                ctx.clearRect(0, 0, width, height);
+                particles.forEach((p) => {
+                    p.life++;
+
+                    if (p.life < p.delay) return;
+                    const progress = (p.life - p.delay) / p.maxLife;
+
+                    if (progress < 0.2) {
+                        p.opacity = (progress / 0.2) * p.maxOpacity;
+                    } else if (progress > 0.6) {
+                        p.opacity = ((1 - progress) / 0.4) * p.maxOpacity;
+                    } else {
+                        p.opacity = p.maxOpacity;
+                    }
+
+                    p.x += p.speedX;
+                    p.y += p.speedY;
+
+                    p.speedX *= 0.98;
+                    p.speedY *= 0.99;
+
+                    p.rotation += p.rotationSpeed;
+
+                    const scale = 1 - (progress * 0.5);
+
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate((p.rotation * Math.PI) / 180);
+                    ctx.globalAlpha = p.opacity;
+
+                    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, p.size * scale);
+                    gradient.addColorStop(0, p.color);
+                    gradient.addColorStop(1, 'rgba(139, 92, 246, 0)');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(
+                        -(p.size * scale) / 2,
+                        -(p.size * scale) / 2,
+                        p.size * scale,
+                        p.size * scale
+                    );
+                    ctx.restore();
+                });
+                frame++;
+                requestAnimationFrame(animate);
+            }
+            animate();
+        }
+
+        function startScannerAnimation(canvas) {
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            const particles = [];
+            const scanDuration = 40; 
+            let frame = 0;
+            function animate() {
+                if (frame >= scanDuration) {
+                    ctx.clearRect(0, 0, width, height);
+                    return;
+                }
+                ctx.clearRect(0, 0, width, height);
+
+                const scanProgress = frame / scanDuration;
+                const scanX = width * scanProgress;
+
+                if (frame % 2 === 0 && scanProgress > 0.1 && scanProgress < 0.9) {
+                    for (let i = 0; i < 3; i++) {
+                        particles.push({
+                            x: scanX,
+                            y: Math.random() * height,
+                            size: Math.random() * 2 + 1,
+                            speedX: (Math.random() - 0.5) * 1,
+                            speedY: (Math.random() - 0.5) * 2,
+                            opacity: 0.8,
+                            life: 0,
+                            maxLife: 30,
+                            color: Math.random() > 0.5 ? '#60a5fa' : '#93c5fd'
+                        });
+                    }
+                }
+
+                if (scanProgress > 0.05 && scanProgress < 0.95) {
+                    const beamGradient = ctx.createLinearGradient(scanX - 15, 0, scanX + 15, 0);
+                    beamGradient.addColorStop(0, 'rgba(96, 165, 250, 0)');
+                    beamGradient.addColorStop(0.5, 'rgba(96, 165, 250, 0.6)');
+                    beamGradient.addColorStop(1, 'rgba(96, 165, 250, 0)');
+                    ctx.fillStyle = beamGradient;
+                    ctx.fillRect(scanX - 15, 0, 30, height);
+                }
+
+                particles.forEach((p, index) => {
+                    p.life++;
+                    if (p.life >= p.maxLife) {
+                        particles.splice(index, 1);
+                        return;
+                    }
+                    const progress = p.life / p.maxLife;
+                    p.x += p.speedX;
+                    p.y += p.speedY;
+                    p.opacity = 0.8 * (1 - progress);
+                    ctx.save();
+                    ctx.globalAlpha = p.opacity;
+                    ctx.fillStyle = p.color;
+                    ctx.shadowBlur = 4;
+                    ctx.shadowColor = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                });
+                frame++;
+                requestAnimationFrame(animate);
+            }
+            animate();
+        }
+
+        window.engineAnimationRunning = false;
+        window.engineSpeedMultiplier = 1.0; 
+        function initEngineCanvas() {
+            var canvas = document.getElementById("canvas");
+            if (!canvas) return;
+            var ctx = canvas.getContext("2d");
+            var bgg = document.getElementById("bg_glow");
+
+            var w = ctx.canvas.width = 112;
+            var h = ctx.canvas.height = 112;
+            var dots = [{}];
+            var mx = 0, my = 0;
+            var md = 50; 
+            var maxWidth = 10;
+            var minWidth = 1;
+            var maxHeight = h * 0.9;
+            var minHeight = h * 0.5;
+            var baseMaxSpeed = 20;
+            var baseMinSpeed = 3;
+            var hue = 210; 
+            var hueDif = 30;
+            var glow = 5;
+            ctx.globalCompositeOperation = "lighter";
+            function pushDots(num) {
+                for (var i = 1; i < md; i++) {
+                    dots.push({
+                        x: Math.random() * w,
+                        y: Math.random() * h / 2,
+                        h: Math.random() * (maxHeight - minHeight) + minHeight,
+                        w: Math.random() * (maxWidth - minWidth) + minWidth,
+                        c: Math.random() * ((hue + hueDif) - (hue - hueDif)) + (hue - hueDif),
+                        m: Math.random() * (baseMaxSpeed - baseMinSpeed) + baseMinSpeed
+                    });
+                }
+            }
+            pushDots();
+            function render() {
+
+                if (window.engineAnimationRunning) {
+                    ctx.clearRect(0, 0, w, h);
+                    for (var i = 1; i < dots.length; i++) {
+                        ctx.beginPath();
+                        var grd = ctx.createLinearGradient(dots[i].x, dots[i].y, dots[i].x + dots[i].w, dots[i].y + dots[i].h);
+                        grd.addColorStop(.0, "hsla(" + dots[i].c + ",50%,50%,.0)");
+                        grd.addColorStop(.2, "hsla(" + (dots[i].c + 20) + ",50%,50%,.5)");
+                        grd.addColorStop(.5, "hsla(" + (dots[i].c + 50) + ",70%,60%,.8)");
+                        grd.addColorStop(.8, "hsla(" + (dots[i].c + 80) + ",50%,50%,.5)");
+                        grd.addColorStop(1., "hsla(" + (dots[i].c + 100) + ",50%,50%,.0)");
+                        ctx.shadowBlur = glow;
+                        ctx.shadowColor = "hsla(" + (dots[i].c) + ",50%,50%,1)";
+                        ctx.fillStyle = grd;
+                        ctx.fillRect(dots[i].x, dots[i].y, dots[i].w, dots[i].h);
+                        ctx.closePath();
+
+                        dots[i].x += (dots[i].m * window.engineSpeedMultiplier) / 100;
+                        if (dots[i].x > w + maxWidth) {
+                            dots[i].x = -maxWidth;
+                        }
+                    }
+                }
+                window.requestAnimationFrame(render);
+            }
+            bgg.style.background = "radial-gradient(ellipse at center, hsla(" + hue + ",50%,50%,.8) 0%,rgba(0,0,8,0) 100%)";
+            render();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initEngineCanvas();
+        });
+    </script>
+</body>
+</html>

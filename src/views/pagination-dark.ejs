@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Archive History - DeRadar</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@latest/font/lucide.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0a0a0b;
+            color: #e5e5e5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 32px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .record {
+            background: #111113;
+            border: 1px solid #2a2a2d;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+            transition: all 0.2s;
+        }
+
+        .record:hover {
+            border-color: #3a3a3d;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .record-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .record-id {
+            font-size: 14px;
+            color: #888;
+            font-family: monospace;
+        }
+
+        .source-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .source-parquet {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .source-json {
+            background: #333;
+            color: #ccc;
+        }
+
+        .txid-link {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            background: #1a1a1d;
+            border: 1px solid #2a2a2d;
+            border-radius: 8px;
+            color: #60a5fa;
+            text-decoration: none;
+            font-family: monospace;
+            font-size: 14px;
+            transition: all 0.2s;
+            word-break: break-all;
+        }
+
+        .txid-link:hover {
+            background: #252529;
+            border-color: #60a5fa;
+        }
+
+        .metadata {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .meta-icon {
+            width: 16px;
+            height: 16px;
+            color: #888;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .meta-content {
+            flex: 1;
+        }
+
+        .meta-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .meta-value {
+            font-size: 14px;
+            color: #e5e5e5;
+            font-weight: 500;
+        }
+
+        .aircraft-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .aircraft-chip {
+            padding: 4px 10px;
+            background: #1a1a1d;
+            border: 1px solid #2a2a2d;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: monospace;
+            color: #60a5fa;
+        }
+
+        .aircraft-count-badge {
+            padding: 4px 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 32px;
+        }
+
+        .pagination a {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: #111113;
+            border: 1px solid #2a2a2d;
+            border-radius: 8px;
+            color: #e5e5e5;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .pagination a:hover {
+            background: #1a1a1d;
+            border-color: #60a5fa;
+            color: #60a5fa;
+            transform: translateY(-2px);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: #888;
+        }
+
+        .empty-state-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 16px;
+            opacity: 0.3;
+        }
+
+        i[class*="lucide-"] {
+            display: inline-block;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 16px;
+            }
+
+            .container {
+                max-width: 100%;
+            }
+
+            h1 {
+                font-size: 28px;
+                margin-bottom: 24px;
+            }
+
+            .record {
+                padding: 20px;
+                margin-bottom: 16px;
+                border-radius: 12px;
+            }
+
+            .record:hover {
+                transform: none;
+            }
+
+            .record-header {
+                margin-bottom: 14px;
+            }
+
+            .record-id {
+                font-size: 13px;
+            }
+
+            .source-badge {
+                padding: 6px 12px;
+                font-size: 13px;
+            }
+
+            .txid-link {
+                padding: 14px 16px;
+                font-size: 13px;
+                word-break: break-all;
+            }
+
+            .metadata {
+                grid-template-columns: 1fr;
+                gap: 14px;
+                margin-top: 16px;
+            }
+
+            .meta-label {
+                font-size: 12px;
+            }
+
+            .meta-value {
+                font-size: 14px;
+            }
+
+            .aircraft-chip {
+                padding: 5px 10px;
+                font-size: 12px;
+            }
+
+            .aircraft-count-badge {
+                padding: 5px 10px;
+                font-size: 12px;
+            }
+
+            .pagination {
+                display: flex;
+                flex-direction: row;
+                gap: 10px;
+                margin-top: 24px;
+                justify-content: space-between;
+            }
+
+            .pagination a {
+                padding: 14px 20px;
+                flex: 1;
+                justify-content: center;
+                font-size: 14px;
+                min-height: 48px;
+                display: flex;
+                align-items: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 12px;
+            }
+
+            h1 {
+                font-size: 24px;
+                margin-bottom: 20px;
+            }
+
+            .record {
+                padding: 16px;
+                margin-bottom: 14px;
+            }
+
+            .txid-link {
+                font-size: 12px;
+                padding: 12px 14px;
+            }
+
+            .meta-value {
+                font-size: 13px;
+            }
+
+            .aircraft-chips {
+                gap: 6px;
+            }
+
+            .pagination a {
+                padding: 12px 16px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            <i class="lucide-database"></i>
+            Archive History
+        </h1>
+
+        <% if (results.length === 0) { %>
+            <div class="empty-state">
+                <i class="lucide-inbox empty-state-icon"></i>
+                <p>No archive records found</p>
+            </div>
+        <% } else { %>
+            <% results.forEach(function(record) { %>
+                <div class="record">
+                    <div class="record-header">
+                        <span class="record-id">#<%= record.id %></span>
+                        <span class="source-badge <%= record.format === 'Parquet' ? 'source-parquet' : 'source-json' %>">
+                            <% if (record.format === 'Parquet') { %>
+                                <i class="lucide-package"></i>
+                            <% } else { %>
+                                <i class="lucide-file-json"></i>
+                            <% } %>
+                            <%= record.source %>
+                        </span>
+                    </div>
+
+                    <a href="https://arweave.net/<%= record.txId %>" target="_blank" class="txid-link">
+                        <i class="lucide-external-link"></i>
+                        <%= record.txId %>
+                    </a>
+
+                    <div class="metadata">
+                        <% if (record.aircraft_count) { %>
+                            <div class="meta-item">
+                                <i class="lucide-plane meta-icon"></i>
+                                <div class="meta-content">
+                                    <div class="meta-label">Aircraft Count</div>
+                                    <div class="meta-value">
+                                        <span class="aircraft-count-badge"><%= record.aircraft_count %> aircraft</span>
+                                    </div>
+                                </div>
+                            </div>
+                        <% } %>
+
+                        <% if (record.file_size_kb) { %>
+                            <div class="meta-item">
+                                <i class="lucide-hard-drive meta-icon"></i>
+                                <div class="meta-content">
+                                    <div class="meta-label">File Size</div>
+                                    <div class="meta-value"><%= record.file_size_kb %> KB</div>
+                                </div>
+                            </div>
+                        <% } %>
+
+                        <div class="meta-item">
+                            <i class="lucide-clock meta-icon"></i>
+                            <div class="meta-content">
+                                <div class="meta-label">Timestamp</div>
+                                <div class="meta-value"><%= record.timestamp %></div>
+                            </div>
+                        </div>
+
+                        <div class="meta-item">
+                            <i class="lucide-calendar meta-icon"></i>
+                            <div class="meta-content">
+                                <div class="meta-label">Created At</div>
+                                <div class="meta-value"><%= new Date(record.createdAt).toLocaleString() %></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <% if (record.icao_addresses && record.icao_addresses.length > 0) { %>
+                        <div class="meta-item" style="margin-top: 16px;">
+                            <i class="lucide-hash meta-icon"></i>
+                            <div class="meta-content">
+                                <div class="meta-label">ICAO Addresses</div>
+                                <div class="aircraft-chips">
+                                    <% record.icao_addresses.slice(0, 10).forEach(function(icao) { %>
+                                        <span class="aircraft-chip"><%= icao %></span>
+                                    <% }); %>
+                                    <% if (record.icao_addresses.length > 10) { %>
+                                        <span class="aircraft-chip">+<%= record.icao_addresses.length - 10 %> more</span>
+                                    <% } %>
+                                </div>
+                            </div>
+                        </div>
+                    <% } %>
+                </div>
+            <% }); %>
+
+            <div class="pagination">
+                <% if (previous) { %>
+                    <a href="<%= previous %>">
+                        <i class="lucide-chevron-left"></i>
+                        Previous
+                    </a>
+                <% } %>
+                <% if (next) { %>
+                    <a href="<%= next %>">
+                        Next
+                        <i class="lucide-chevron-right"></i>
+                    </a>
+                <% } %>
+            </div>
+        <% } %>
+    </div>
+</body>
+</html>

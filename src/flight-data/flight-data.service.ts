@@ -22,7 +22,12 @@ export class FlightDataService {
     this.urls = this.config.get('antennas') as AntennaConfig[];
   }
 
-  @Cron('*/60 * * * * *')
+  /**
+   * OLD BATCH SYSTEM - DISABLED
+   * Replaced by real-time per-aircraft tracking
+   * To re-enable: uncomment @Cron decorator
+   */
+  // @Cron('*/60 * * * * *')
   async fetchAircraftData() {
     const release = await this.mutex.acquire();
 
@@ -48,7 +53,7 @@ export class FlightDataService {
             continue;
           }
 
-          const txId = await this.archiveService.uploadJson({
+          const txId = await this.archiveService.uploadParquet({
             source: antenna.id,
             timestamp: new Date().toISOString(),
             ...data,

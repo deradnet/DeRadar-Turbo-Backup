@@ -3,11 +3,16 @@ import { ArchiveService } from './archive.service';
 import { ArchiveController } from './archive.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ArchiveRecord } from './entities/archive-record.entity';
+import { AircraftTrack } from './entities/aircraft-track.entity';
+import { SystemStats } from './entities/system-stats.entity';
+import { HttpModule } from '@nestjs/axios';
+import { AircraftTrackerService } from './aircraft-tracker.service';
+import { StatsGateway } from './stats.gateway';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ArchiveRecord])],
-  providers: [ArchiveService],
+  imports: [TypeOrmModule.forFeature([ArchiveRecord, AircraftTrack, SystemStats]), HttpModule],
+  providers: [ArchiveService, AircraftTrackerService, StatsGateway],
   controllers: [ArchiveController],
-  exports: [ArchiveService],
+  exports: [ArchiveService, AircraftTrackerService],
 })
 export class ArchiveModule {}

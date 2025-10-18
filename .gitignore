@@ -59,3 +59,42 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 src/uploads/*
 database/*.sqlite
 keys/arweave-keyfile-*
+
+# Parquet files (test data)
+*.parquet
+
+# Large data files
+*.json.gz
+aircraft.json
+
+# Test files
+test-*.js
+convert-to-parquet*.js
+inspect-parquet.js
+
+# NPM audit results
+npm-audit-results.json
+
+# Database files
+/data
+/database
+*.db
+*.sqlite
+
+# Arweave keys (security)
+/keys
+arweave-keyfile-*.json
+*.jwk
+
+# Internal documentation (all files prefixed with INT-)
+INT-*.md
+
+# Private documentation
+/docs
+
+# Backup files
+*.bak
+
+# config files
+config.yaml
+*-report.json

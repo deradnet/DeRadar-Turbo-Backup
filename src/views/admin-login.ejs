@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeRadar Node Dashboard - Sign In</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@latest/font/lucide.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            dark: {
+              bg: '#0a0a0b',
+              card: '#161618',
+              panel: '#111113',
+              hover: '#1e1e20',
+              border: '#252528',
+              text: '#e0e0e0'
+            },
+            queue: {
+              primary: '#60a5fa',
+              secondary: '#3b82f6',
+              accent: '#93c5fd',
+              completed: '#34d399',
+              pending: '#fbbf24',
+              failed: '#f87171',
+              waiting: '#a78bfa',
+              slot: '#60a5fa',
+              upload: '#10b981'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    [x-cloak] { display: none !important; }
+
+    body {
+      background: linear-gradient(135deg, #0a0a0b 0%, #111113 50%, #0a0a0b 100%);
+      background-attachment: fixed;
+    }
+
+    .login-card {
+      backdrop-filter: blur(10px);
+      background: linear-gradient(135deg, rgba(22, 22, 24, 0.95) 0%, rgba(17, 17, 19, 0.95) 100%);
+      border: 1px solid rgba(96, 165, 250, 0.1);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(96, 165, 250, 0.05);
+    }
+
+    .logo-glow {
+      box-shadow: 0 0 30px rgba(96, 165, 250, 0.3), 0 0 60px rgba(59, 130, 246, 0.2);
+    }
+
+    .input-field {
+      background: rgba(22, 22, 24, 0.8);
+      border: 1px solid #252528;
+      color: #e0e0e0;
+      transition: all 0.3s ease;
+    }
+
+    .input-field:focus {
+      background: rgba(30, 30, 32, 0.9);
+      border-color: #60a5fa;
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+      outline: none;
+    }
+
+    .input-field::placeholder {
+      color: #6b7280;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+      box-shadow: 0 4px 15px rgba(96, 165, 250, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      box-shadow: 0 6px 25px rgba(96, 165, 250, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+    }
+
+    .floating {
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 20px rgba(96, 165, 250, 0.2); }
+      50% { box-shadow: 0 0 40px rgba(96, 165, 250, 0.4); }
+    }
+
+    .pulse-glow {
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+
+    /* Logo Animations */
+    @keyframes spin-fast {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes spin-slow {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes spin-reverse {
+      from { transform: rotate(360deg); }
+      to { transform: rotate(0deg); }
+    }
+
+    @keyframes matrix-rain {
+      0% { transform: translateY(-100%); opacity: 0; }
+      50% { opacity: 1; }
+      100% { transform: translateY(100%); opacity: 0; }
+    }
+
+    @keyframes scan-line {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(100%); }
+    }
+
+    @keyframes energy-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.5); opacity: 0.5; }
+    }
+
+    @keyframes particle-float {
+      0%, 100% { transform: translate(0, 0); opacity: 0.5; }
+      25% { transform: translate(5px, -5px); opacity: 1; }
+      50% { transform: translate(0, -10px); opacity: 0.5; }
+      75% { transform: translate(-5px, -5px); opacity: 1; }
+    }
+
+    @keyframes orbit-1 {
+      from { transform: translate(-50%, -50%) rotate(0deg) translateX(20px) rotate(0deg); }
+      to { transform: translate(-50%, -50%) rotate(360deg) translateX(20px) rotate(-360deg); }
+    }
+
+    @keyframes orbit-2 {
+      from { transform: translate(-50%, -50%) rotate(0deg) translateX(25px) rotate(0deg); }
+      to { transform: translate(-50%, -50%) rotate(360deg) translateX(25px) rotate(-360deg); }
+    }
+
+    @keyframes orbit-3 {
+      from { transform: translate(-50%, -50%) rotate(0deg) translateX(30px) rotate(0deg); }
+      to { transform: translate(-50%, -50%) rotate(360deg) translateX(30px) rotate(-360deg); }
+    }
+
+    @keyframes shockwave {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(2); opacity: 0; }
+    }
+
+    @keyframes glitch {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-2px); }
+      40% { transform: translateX(2px); }
+      60% { transform: translateX(-2px); }
+      80% { transform: translateX(2px); }
+    }
+
+    .animate-spin-fast { animation: spin-fast 2s linear infinite; }
+    .animate-spin-slow { animation: spin-slow 4s linear infinite; }
+    .animate-spin-reverse { animation: spin-reverse 3s linear infinite; }
+    .animate-matrix-rain { animation: matrix-rain 2s linear infinite; }
+    .animate-scan-line { animation: scan-line 2s linear infinite; }
+    .animate-energy-pulse { animation: energy-pulse 1.5s ease-in-out infinite; }
+    .animate-particle-float { animation: particle-float 3s ease-in-out infinite; }
+    .animate-orbit-1 { animation: orbit-1 3s linear infinite; }
+    .animate-orbit-2 { animation: orbit-2 4s linear infinite; }
+    .animate-orbit-3 { animation: orbit-3 5s linear infinite; }
+    .animate-shockwave { animation: shockwave 2s ease-out infinite; }
+    .animate-glitch { animation: glitch 0.3s ease-in-out infinite; }
+
+    .bg-gradient-conic-fast { background: conic-gradient(from 0deg, transparent, white, transparent); }
+    .bg-gradient-conic-slow { background: conic-gradient(from 0deg, transparent, cyan, transparent); }
+    .bg-gradient-conic-reverse { background: conic-gradient(from 0deg, transparent, blue, transparent); }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4" x-data="loginApp()">
+  <!-- Background Pattern -->
+  <div class="fixed inset-0 overflow-hidden pointer-events-none">
+    <div class="absolute top-20 left-20 w-72 h-72 bg-queue-primary opacity-5 rounded-full blur-3xl"></div>
+    <div class="absolute bottom-20 right-20 w-96 h-96 bg-queue-secondary opacity-5 rounded-full blur-3xl"></div>
+  </div>
+
+  <!-- Login Card -->
+  <div class="w-full max-w-md relative z-10">
+    <div class="login-card rounded-2xl overflow-hidden">
+      <!-- Header -->
+      <div class="p-8 text-center">
+        <!-- Logo -->
+        <div class="flex justify-center mb-4">
+          <div class="group relative p-3 rounded-xl shadow-lg overflow-hidden cursor-pointer transition-all duration-500 ease-out hover:scale-125 hover:rotate-3 bg-gradient-to-br from-blue-600 via-cyan-600 to-blue-800 hover:shadow-[0_0_40px_rgba(59,130,246,0.8)] hover:border hover:border-white/30" style="background: linear-gradient(135deg, rgb(37, 99, 235) 0%, rgb(8, 145, 178) 25%, rgb(2, 132, 199) 50%, rgb(3, 105, 161) 75%, rgb(30, 58, 138) 100%);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide icon-radar w-6 h-6 text-white relative z-20 transition-all duration-700 ease-out will-change-transform group-hover:rotate-[360deg] group-hover:scale-150 group-hover:drop-shadow-[0_0_15px_rgba(255,255,255,1)] group-hover:text-cyan-100" style="filter: drop-shadow(rgba(255, 255, 255, 0.5) 0px 0px 8px);">
+              <path d="M19.07 4.93A10 10 0 0 0 6.99 3.34"></path>
+              <path d="M4 6h.01"></path>
+              <path d="M2.29 9.62A10 10 0 1 0 21.31 8.35"></path>
+              <path d="M16.24 7.76A6 6 0 1 0 8.23 16.67"></path>
+              <path d="M12 18h.01"></path>
+              <path d="M17.99 11.66A6 6 0 0 1 15.77 16.67"></path>
+              <circle cx="12" cy="12" r="2"></circle>
+              <path d="m13.41 10.59 5.66-5.66"></path>
+            </svg>
+            <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out pointer-events-none">
+              <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse rounded-xl"></div>
+              <div class="absolute inset-0">
+                <div class="absolute inset-0 bg-gradient-conic-fast from-transparent via-white/40 to-transparent animate-spin-fast rounded-full"></div>
+                <div class="absolute inset-0 bg-gradient-conic-slow from-transparent via-cyan-300/30 to-transparent animate-spin-slow rounded-full"></div>
+                <div class="absolute inset-0 bg-gradient-conic-reverse from-transparent via-blue-300/20 to-transparent animate-spin-reverse rounded-full"></div>
+              </div>
+              <div class="absolute inset-0">
+                <div class="absolute inset-0 border-2 border-white/20 rounded-full animate-ping"></div>
+                <div class="absolute inset-1 border border-cyan-300/30 rounded-full animate-ping" style="animation-delay: 200ms;"></div>
+                <div class="absolute inset-2 border border-blue-300/20 rounded-full animate-ping" style="animation-delay: 500ms;"></div>
+              </div>
+              <div class="absolute inset-0 overflow-hidden rounded-xl">
+                <div class="absolute top-0 left-1 w-px h-full bg-gradient-to-b from-transparent via-green-400/50 to-transparent animate-matrix-rain"></div>
+                <div class="absolute top-0 left-3 w-px h-full bg-gradient-to-b from-transparent via-cyan-400/40 to-transparent animate-matrix-rain" style="animation-delay: 100ms;"></div>
+                <div class="absolute top-0 right-1 w-px h-full bg-gradient-to-b from-transparent via-blue-400/50 to-transparent animate-matrix-rain" style="animation-delay: 300ms;"></div>
+                <div class="absolute top-0 right-3 w-px h-full bg-gradient-to-b from-transparent via-purple-400/40 to-transparent animate-matrix-rain" style="animation-delay: 500ms;"></div>
+              </div>
+              <div class="absolute inset-0">
+                <div class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent animate-scan-line"></div>
+                <div class="absolute top-2 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent animate-scan-line" style="animation-delay: 200ms;"></div>
+                <div class="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-300/40 to-transparent animate-scan-line" style="animation-delay: 400ms;"></div>
+              </div>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <div class="w-2 h-2 bg-white rounded-full animate-energy-pulse shadow-[0_0_10px_rgba(255,255,255,0.8)]"></div>
+              </div>
+              <div class="absolute inset-0">
+                <div class="absolute top-0 left-0 w-1 h-1 bg-cyan-300 rounded-full animate-particle-float"></div>
+                <div class="absolute top-0 right-0 w-1 h-1 bg-blue-300 rounded-full animate-particle-float" style="animation-delay: 100ms;"></div>
+                <div class="absolute bottom-0 left-0 w-1 h-1 bg-purple-300 rounded-full animate-particle-float" style="animation-delay: 200ms;"></div>
+                <div class="absolute bottom-0 right-0 w-1 h-1 bg-pink-300 rounded-full animate-particle-float" style="animation-delay: 300ms;"></div>
+                <div class="absolute inset-0">
+                  <div class="absolute top-1/2 left-1/2 w-1 h-1 bg-white rounded-full animate-orbit-1"></div>
+                  <div class="absolute top-1/2 left-1/2 w-1 h-1 bg-cyan-300 rounded-full animate-orbit-2"></div>
+                  <div class="absolute top-1/2 left-1/2 w-1 h-1 bg-blue-300 rounded-full animate-orbit-3"></div>
+                </div>
+              </div>
+              <div class="absolute inset-0">
+                <div class="absolute inset-0 border-4 border-white/30 rounded-full animate-shockwave"></div>
+              </div>
+              <div class="absolute inset-0 bg-gradient-to-r from-red-500/10 via-transparent to-blue-500/10 animate-glitch"></div>
+            </div>
+          </div>
+        </div>
+
+        <h1 class="text-3xl font-bold text-white mb-2">DeRadar</h1>
+        <p class="text-gray-400 text-sm">Node Dashboard Access</p>
+      </div>
+
+      <!-- Form -->
+      <div class="px-8 pb-8">
+        <!-- Error Alert -->
+        <div x-show="errorMessage"
+             x-transition
+             class="mb-6 bg-red-900/20 border border-red-500/30 text-red-400 rounded-lg p-4 text-sm">
+          <div class="flex items-start">
+            <i class="icon-alert-circle mr-2 flex-shrink-0"></i>
+            <span x-text="errorMessage"></span>
+          </div>
+        </div>
+
+        <form @submit.prevent="login" class="space-y-6">
+          <!-- Username -->
+          <div>
+            <label for="username" class="block text-sm font-semibold text-gray-400 mb-2">
+              Username
+            </label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i class="icon-user text-gray-500"></i>
+              </div>
+              <input
+                type="text"
+                id="username"
+                x-model="credentials.username"
+                required
+                autocomplete="username"
+                class="input-field w-full pl-10 pr-4 py-3 rounded-lg"
+                placeholder="Enter your username"
+                :disabled="loading"
+              >
+            </div>
+          </div>
+
+          <!-- Password -->
+          <div>
+            <label for="password" class="block text-sm font-semibold text-gray-400 mb-2">
+              Password
+            </label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i class="icon-lock text-gray-500"></i>
+              </div>
+              <input
+                type="password"
+                id="password"
+                x-model="credentials.password"
+                required
+                autocomplete="current-password"
+                class="input-field w-full pl-10 pr-4 py-3 rounded-lg"
+                placeholder="Enter your password"
+                :disabled="loading"
+              >
+            </div>
+          </div>
+
+          <!-- Submit Button -->
+          <button
+            type="submit"
+            :disabled="loading"
+            class="btn-primary w-full text-white py-3 px-4 rounded-lg font-semibold flex items-center justify-center"
+          >
+            <template x-if="loading">
+              <svg class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </template>
+            <i x-show="!loading" class="icon-log-in mr-2"></i>
+            <span x-text="loading ? 'Signing in...' : 'Sign In'"></span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Footer -->
+      <div class="bg-dark-panel/50 px-8 py-4 border-t border-dark-border">
+        <p class="text-center text-xs text-gray-500">
+          <i class="icon-shield-check inline-block mr-1" style="width: 0.875rem; height: 0.875rem;"></i>
+          DeRadar &copy; 2025
+        </p>
+      </div>
+    </div>
+
+    <!-- Status Indicator -->
+    <div class="mt-6 text-center">
+      <div class="inline-flex items-center px-4 py-2 bg-dark-card/80 border border-dark-border rounded-full">
+        <span class="w-2 h-2 bg-queue-completed rounded-full mr-2 pulse-glow"></span>
+        <span class="text-xs text-gray-400">System Online</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function loginApp() {
+      return {
+        credentials: {
+          username: '',
+          password: ''
+        },
+        loading: false,
+        errorMessage: '',
+
+        async login() {
+          this.errorMessage = '';
+          this.loading = true;
+
+          try {
+            const response = await fetch('/auth/login', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.credentials)
+            });
+
+            if (response.ok) {
+              window.location.href = '/admin';
+            } else {
+              const data = await response.json().catch(() => ({}));
+              this.errorMessage = data.message || 'Invalid username or password. Please try again.';
+            }
+          } catch (error) {
+            this.errorMessage = 'Connection error. Please check your network and try again.';
+          } finally {
+            this.loading = false;
+          }
+        }
+      }
+    }
+  </script>
+</body>
+</html>
