@@ -33,7 +33,16 @@ async function bootstrap() {
   app.use(json({ limit: '100mb' }));
   app.enableCors({ origin: '*' });
 
-  app.useGlobalPipes(new ValidationPipe());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true, // Strip properties that don't have decorators
+      forbidNonWhitelisted: true, // Throw error if non-whitelisted properties are present
+      transform: true, // Automatically transform payloads to DTO instances
+      transformOptions: {
+        enableImplicitConversion: true, // Enable type conversion
+      },
+    }),
+  );
 
   const devViewsPath = join(__dirname, '..', 'src', 'views');
   const prodViewsPath = join(__dirname, 'views');

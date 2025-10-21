@@ -14,6 +14,11 @@ export class AuthService {
     ) {
       return null;
     }
-    return { user };
+    // Return only safe user data (exclude password and secret)
+    return {
+      user: {
+        username: user['username'],
+      },
+    };
   }
 }

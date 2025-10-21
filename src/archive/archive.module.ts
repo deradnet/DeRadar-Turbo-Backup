@@ -8,9 +8,14 @@ import { SystemStats } from './entities/system-stats.entity';
 import { HttpModule } from '@nestjs/axios';
 import { AircraftTrackerService } from './aircraft-tracker.service';
 import { StatsGateway } from './stats.gateway';
+import { CommonModule } from '../common/common.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ArchiveRecord, AircraftTrack, SystemStats]), HttpModule],
+  imports: [
+    TypeOrmModule.forFeature([ArchiveRecord, AircraftTrack, SystemStats]),
+    HttpModule,
+    CommonModule,
+  ],
   providers: [ArchiveService, AircraftTrackerService, StatsGateway],
   controllers: [ArchiveController],
   exports: [ArchiveService, AircraftTrackerService],

@@ -59,6 +59,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 src/uploads/*
 database/*.sqlite
 keys/arweave-keyfile-*
+cookies.txt
 
 # Parquet files (test data)
 *.parquet

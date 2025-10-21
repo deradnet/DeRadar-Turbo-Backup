@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import appConfig from './common/utils/app.config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -19,6 +21,11 @@ import { ApiEnabledGuard } from './common/guards/api-enabled.guard';
       isGlobal: true,
       load: [appConfig],
     }),
+    // Global rate limiting - 100 requests per minute
+    ThrottlerModule.forRoot([{
+      ttl: 60000, // 1 minute in milliseconds
+      limit: 100, // 100 requests per minute
+    }]),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
@@ -37,6 +44,15 @@ import { ApiEnabledGuard } from './common/guards/api-enabled.guard';
     AuthModule,
   ],
   controllers: [AppController],
-  providers: [ApiEnabledGuard, AppService, SystemService],
+  providers: [
+    ApiEnabledGuard,
+    AppService,
+    SystemService,
+    // Global rate limiting guard
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

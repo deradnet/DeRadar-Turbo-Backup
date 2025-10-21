@@ -7,6 +7,9 @@ import { SessionAuthGuard } from '../auth/session.guard';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AircraftTrackerService } from './aircraft-tracker.service';
+import { PaginationDto } from './dto/pagination.dto';
+import { TxIdDto } from './dto/tx-id.dto';
+import { AuditLoggerService } from '../common/services/audit-logger.service';
 
 @Controller('archive')
 export class ArchiveController {
@@ -14,6 +17,7 @@ export class ArchiveController {
     private readonly archiveService: ArchiveService,
     private readonly httpService: HttpService,
     private readonly aircraftTrackerService: AircraftTrackerService,
+    private readonly auditLogger: AuditLoggerService,
   ) {}
 
   /**
@@ -21,14 +25,13 @@ export class ArchiveController {
    */
   @Get('all')
   async getAll(
-    @Query('offset') offset = '0',
-    @Query('limit') limit = '10',
+    @Query() pagination: PaginationDto,
     @Req() req: Request,
     @Res() res: Response,
   ) {
     const result = await this.archiveService.findAll({
-      offset: parseInt(offset, 10),
-      limit: parseInt(limit, 10),
+      offset: pagination.offset,
+      limit: pagination.limit,
       req,
     });
     if (req.accepts('html')) {
@@ -42,8 +45,11 @@ export class ArchiveController {
    * PUBLIC - Read-only endpoint for viewing individual transaction data
    */
   @Get(':txId')
-  async getOne(@Param('txId') txId: string): Promise<any> {
-    const raw = await this.archiveService.getDataByTX(txId);
+  async getOne(@Param() params: TxIdDto): Promise<any> {
+    const raw = await this.archiveService.getDataByTX(params.txId);
+    if (!raw) {
+      throw new Error('Transaction not found');
+    }
     return JSON.parse(raw);
   }
 
@@ -74,13 +80,48 @@ export class ArchiveController {
    */
   @UseGuards(SessionAuthGuard)
   @Post('tracking/start')
-  async startTracking(): Promise<any> {
-    await this.aircraftTrackerService.startTracking();
-    return {
-      success: true,
-      message: 'Aircraft tracking started',
-      info: 'System will poll every 1 second and upload changed aircraft to Arweave',
-    };
+  async startTracking(@Req() req): Promise<any> {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const username = req.session?.user?.user?.username || 'unknown';
+
+    try {
+      await this.aircraftTrackerService.startTracking();
+
+      // Log successful admin action
+      this.auditLogger.logAdminAction(
+        'START_TRACKING',
+        username,
+        ip,
+        userAgent,
+        '/archive/tracking/start',
+        {
+          message: 'Aircraft tracking started',
+          info: 'System will poll every 1 second and upload changed aircraft to Arweave',
+        },
+        true,
+      );
+
+      return {
+        success: true,
+        message: 'Aircraft tracking started',
+        info: 'System will poll every 1 second and upload changed aircraft to Arweave',
+      };
+    } catch (error) {
+      // Log failed admin action
+      this.auditLogger.logAdminAction(
+        'START_TRACKING',
+        username,
+        ip,
+        userAgent,
+        '/archive/tracking/start',
+        {
+          error: error.message,
+        },
+        false,
+      );
+      throw error;
+    }
   }
 
   /**
@@ -88,12 +129,46 @@ export class ArchiveController {
    */
   @UseGuards(SessionAuthGuard)
   @Post('tracking/stop')
-  async stopTracking(): Promise<any> {
-    this.aircraftTrackerService.stopTracking();
-    return {
-      success: true,
-      message: 'Aircraft tracking stopped',
-    };
+  async stopTracking(@Req() req): Promise<any> {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const username = req.session?.user?.user?.username || 'unknown';
+
+    try {
+      this.aircraftTrackerService.stopTracking();
+
+      // Log successful admin action
+      this.auditLogger.logAdminAction(
+        'STOP_TRACKING',
+        username,
+        ip,
+        userAgent,
+        '/archive/tracking/stop',
+        {
+          message: 'Aircraft tracking stopped',
+        },
+        true,
+      );
+
+      return {
+        success: true,
+        message: 'Aircraft tracking stopped',
+      };
+    } catch (error) {
+      // Log failed admin action
+      this.auditLogger.logAdminAction(
+        'STOP_TRACKING',
+        username,
+        ip,
+        userAgent,
+        '/archive/tracking/stop',
+        {
+          error: error.message,
+        },
+        false,
+      );
+      throw error;
+    }
   }
 
   /**
