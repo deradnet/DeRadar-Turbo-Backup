@@ -2,48 +2,14 @@
 
 All notable changes to DeRadar Turbo Backup Engine will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.1.0](https://github.com///compare/v2.0.0...v2.1.0) (2025-10-23)
 
-### Added
-- Arweave wallet authentication with Wander wallet integration
-- ArweaveSignatureService for RSA-PSS cryptographic signature verification
-- WalletAuthService with challenge-response (nonce) authentication system
-- Encrypted data pipeline with AES-256-GCM encryption service
-- EncryptedArchiveRecord entity for secure data storage
-- Encrypted archive uploads to Arweave network
-- Comprehensive audit logging with AuditExceptionFilter
-- Rate limiting on authentication endpoints (5-10 requests/min)
-- Wallet login UI integration with connection status indicators
-- Modular view partials (head, styles, dashboard-core)
-- Session secret auto-generation utility
-- Visual assets (ArDrive and Nillion logos)
-- config.yaml.example template for secure configuration
 
-### Changed
-- Enhanced admin login page with dual authentication (credentials + wallet)
-- Updated pagination UI with improved dark mode styling
-- Extended archive entities with encryption support fields
-- Improved session management with explicit save callbacks
-- Enhanced error handling across authentication flows
+### Features
 
-### Security
-- **Zero private key storage** - All signing happens client-side in wallet
-- **Replay attack protection** - One-time cryptographic nonces with 5-minute expiration
-- **Cryptographically secure nonces** using crypto.randomBytes(32)
-- **Automatic nonce cleanup** to prevent memory leaks
-- **Strict input validation** with class-validator for all DTOs
-- **Rate limiting** prevents brute force attacks
-- **Comprehensive audit trail** for all security events
-- **End-to-end encryption** for sensitive aircraft tracking data
-- **Removed config.yaml from git tracking** to protect secrets
-
-### Fixed
-- Session cookie security (preparing for production hardening)
-
----
+* add Arweave wallet authentication with cryptographic signature verification and encrypted data pipeline ([ad27d85](https://github.com///commit/ad27d85d36fdac4e8acf81f61f88f2a43427fc7e))
+* add Arweave wallet authentication with cryptographic signature verification and encrypted data pipeline ([cf40ee2](https://github.com///commit/cf40ee2c5362e578cba557d1d6920e5cc16a5a83))
 
 ## [2.0.0] - 2025-10-19
 
