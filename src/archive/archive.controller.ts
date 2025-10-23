@@ -42,6 +42,23 @@ export class ArchiveController {
   }
 
   /**
+   * PUBLIC - Read-only endpoint for viewing encrypted data archive
+   */
+  @Get('encrypted/all')
+  async getAllEncrypted(
+    @Query() pagination: PaginationDto,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const result = await this.archiveService.findAllEncrypted({
+      offset: pagination.offset,
+      limit: pagination.limit,
+      req,
+    });
+    res.json(result);
+  }
+
+  /**
    * PUBLIC - Read-only endpoint for viewing individual transaction data
    */
   @Get(':txId')

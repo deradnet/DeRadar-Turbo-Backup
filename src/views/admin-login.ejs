@@ -284,6 +284,57 @@
           </div>
         </div>
 
+        <!-- Success Alert -->
+        <div x-show="successMessage"
+             x-transition
+             class="mb-6 bg-green-900/20 border border-green-500/30 text-green-400 rounded-lg p-4 text-sm">
+          <div class="flex items-start">
+            <i class="icon-check-circle mr-2 flex-shrink-0"></i>
+            <span x-text="successMessage"></span>
+          </div>
+        </div>
+
+        <!-- Wallet Login Button -->
+        <div class="mb-6">
+          <!-- Wallet Connected Status -->
+          <div x-show="walletConnected && !loading" class="mb-3 p-3 bg-green-900/20 border border-green-500/30 rounded-lg">
+            <div class="flex items-center text-green-400 text-sm">
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              <span>Wallet connected: <span x-text="walletAddress.substring(0, 8) + '...' + walletAddress.substring(walletAddress.length - 8)"></span></span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            @click="connectWallet"
+            :disabled="loading"
+            class="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white py-3 px-4 rounded-lg font-semibold flex items-center justify-center transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <template x-if="loading && loginMethod === 'wallet'">
+              <svg class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </template>
+            <svg x-show="!loading || loginMethod !== 'wallet'" class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+            </svg>
+            <span x-text="walletConnected ? (loading && loginMethod === 'wallet' ? 'Signing in...' : 'Sign in with Wallet') : (loading && loginMethod === 'wallet' ? 'Connecting...' : 'Connect with Wander Wallet')"></span>
+          </button>
+        </div>
+
+        <!-- Divider -->
+        <div class="relative mb-6">
+          <div class="absolute inset-0 flex items-center">
+            <div class="w-full border-t border-dark-border"></div>
+          </div>
+          <div class="relative flex justify-center text-sm">
+            <span class="px-2 bg-dark-card text-gray-500">Or continue with credentials</span>
+          </div>
+        </div>
+
         <form @submit.prevent="login" class="space-y-6">
           <!-- Username -->
           <div>
@@ -374,10 +425,40 @@
         },
         loading: false,
         errorMessage: '',
+        successMessage: '',
+        loginMethod: '', // 'wallet' or 'credentials'
+        walletConnected: false,
+        walletAddress: '',
+
+        async init() {
+          // Check if Wander wallet is installed and connected on page load
+          await this.checkWalletConnection();
+        },
+
+        async checkWalletConnection() {
+          if (!window.arweaveWallet) {
+            return;
+          }
+
+          try {
+            // Check if wallet is already connected
+            const permissions = await window.arweaveWallet.getPermissions();
+            if (permissions.includes('ACCESS_ADDRESS') && permissions.includes('SIGNATURE')) {
+              this.walletConnected = true;
+              this.walletAddress = await window.arweaveWallet.getActiveAddress();
+              console.log('Wallet already connected:', this.walletAddress);
+            }
+          } catch (error) {
+            // Wallet not connected, that's fine
+            console.log('Wallet not yet connected');
+          }
+        },
 
         async login() {
           this.errorMessage = '';
+          this.successMessage = '';
           this.loading = true;
+          this.loginMethod = 'credentials';
 
           try {
             const response = await fetch('/auth/login', {
@@ -397,7 +478,120 @@
             this.errorMessage = 'Connection error. Please check your network and try again.';
           } finally {
             this.loading = false;
+            this.loginMethod = '';
           }
+        },
+
+        async connectWallet() {
+          this.errorMessage = '';
+          this.successMessage = '';
+          this.loading = true;
+          this.loginMethod = 'wallet';
+
+          try {
+            // Check if Wander wallet (arweaveWallet) is available
+            if (!window.arweaveWallet) {
+              this.errorMessage = 'Wander wallet not detected. Please install the Wander browser extension.';
+              this.loading = false;
+              this.loginMethod = '';
+              return;
+            }
+
+            // Check if already connected, if not, request connection
+            if (!this.walletConnected) {
+              await window.arweaveWallet.connect(['SIGNATURE', 'ACCESS_ADDRESS']);
+              this.walletConnected = true;
+            }
+
+            // Get the user's wallet address
+            const walletAddress = await window.arweaveWallet.getActiveAddress();
+            this.walletAddress = walletAddress;
+
+            // Get challenge (nonce) from server
+            const challengeResponse = await fetch('/auth/wallet/challenge', {
+              credentials: 'include'
+            });
+
+            if (!challengeResponse.ok) {
+              throw new Error('Failed to get authentication challenge');
+            }
+
+            const { nonce, message, nodeWallet } = await challengeResponse.json();
+
+            console.log('Challenge received - Nonce:', nonce.substring(0, 20) + '...');
+            console.log('Message to sign:', message);
+            console.log('User wallet:', walletAddress);
+            console.log('Node wallet:', nodeWallet);
+
+            // Check if user's wallet matches the node wallet
+            if (walletAddress !== nodeWallet) {
+              this.errorMessage = `Access denied. Only the node wallet (${nodeWallet.substring(0, 8)}...${nodeWallet.substring(nodeWallet.length - 8)}) can login.`;
+              this.loading = false;
+              this.loginMethod = '';
+              return;
+            }
+
+            // Create message with nonce (challenge-response)
+            const messageWithNonce = `${message}\n\nNonce: ${nonce}`;
+            console.log('Full message with nonce:', messageWithNonce);
+
+            // Sign the message with Wander wallet
+            const encoder = new TextEncoder();
+            const messageData = encoder.encode(messageWithNonce);
+
+            // signMessage() returns an ArrayBuffer
+            const signatureArrayBuffer = await window.arweaveWallet.signMessage(messageData);
+            console.log('Signature ArrayBuffer length:', signatureArrayBuffer.byteLength);
+
+            // Convert ArrayBuffer to base64url
+            const signatureBase64 = this.arrayBufferToBase64Url(signatureArrayBuffer);
+            console.log('Signature base64url (first 50 chars):', signatureBase64.substring(0, 50));
+            console.log('Signature length:', signatureBase64.length);
+
+            // Send signature to backend for verification
+            const loginResponse = await fetch('/auth/wallet/login', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                walletAddress,
+                signature: signatureBase64,
+                nonce
+              })
+            });
+
+            if (loginResponse.ok) {
+              this.successMessage = 'Wallet connected successfully! Redirecting...';
+              setTimeout(() => {
+                window.location.href = '/admin';
+              }, 1000);
+            } else {
+              const data = await loginResponse.json().catch(() => ({}));
+              this.errorMessage = data.message || 'Wallet authentication failed. Please try again.';
+            }
+          } catch (error) {
+            console.error('Wallet connection error:', error);
+            if (error.message && error.message.includes('denied')) {
+              this.errorMessage = 'Wallet connection was denied. Please approve the connection request.';
+            } else if (error.message) {
+              this.errorMessage = error.message;
+            } else {
+              this.errorMessage = 'Failed to connect wallet. Please try again.';
+            }
+          } finally {
+            this.loading = false;
+            this.loginMethod = '';
+          }
+        },
+
+        arrayBufferToBase64Url(buffer) {
+          const bytes = new Uint8Array(buffer);
+          let binary = '';
+          for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          const base64 = btoa(binary);
+          return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
         }
       }
     }

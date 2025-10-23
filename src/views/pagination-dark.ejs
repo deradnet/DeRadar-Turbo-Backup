@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Archive History - DeRadar</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@latest/font/lucide.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         * {
             margin: 0;
@@ -28,10 +30,99 @@
             font-size: 32px;
             font-weight: 700;
             color: #fff;
-            margin-bottom: 32px;
+            margin-bottom: 24px;
             display: flex;
             align-items: center;
             gap: 12px;
+        }
+
+        .tabs-container {
+            margin-bottom: 24px;
+            border-bottom: 1px solid #2a2a2d;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .tab {
+            position: relative;
+            padding: 12px 20px;
+            background: #1a1a1d;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            color: #888;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tab:hover {
+            background: #222225;
+            color: #bbb;
+        }
+
+        .tab.active {
+            background: #111113;
+            color: #60a5fa;
+            border-color: #2a2a2d #2a2a2d transparent;
+            font-weight: 600;
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #60a5fa;
+        }
+
+        .tab-icon {
+            font-size: 16px;
+        }
+
+        .tab-count {
+            background: #2a2a2d;
+            color: #888;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            margin-left: 4px;
+        }
+
+        .tab.active .tab-count {
+            background: rgba(96, 165, 250, 0.2);
+            color: #60a5fa;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .record {
@@ -82,6 +173,48 @@
         .source-json {
             background: #333;
             color: #ccc;
+        }
+
+        .package-uuid {
+            background: rgba(59, 130, 246, 0.1);
+            color: #60a5fa;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            display: inline-block;
+            user-select: all;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .copy-btn {
+            background: #2a2a2d;
+            border: 1px solid #3a3a3d;
+            border-radius: 4px;
+            padding: 6px 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            color: #888;
+            min-width: 32px;
+            height: 32px;
+        }
+
+        .copy-btn:hover {
+            background: #333;
+            border-color: #666;
+            color: #fff;
+        }
+
+        .copy-btn:active {
+            transform: scale(0.95);
+        }
+
+        .copy-btn svg {
+            width: 16px;
+            height: 16px;
         }
 
         .txid-link {
@@ -339,13 +472,31 @@
 <body>
     <div class="container">
         <h1>
-            <i class="lucide-database"></i>
+            <i data-lucide="database"></i>
             Archive History
         </h1>
 
+        <!-- Tab Navigation -->
+        <div class="tabs-container">
+            <ul class="tabs">
+                <li class="tab active" onclick="switchTab('standard')">
+                    <i data-lucide="package" class="tab-icon"></i>
+                    <span>Standard Records</span>
+                    <span class="tab-count" id="standard-count"><%= total %></span>
+                </li>
+                <li class="tab" onclick="switchTab('encrypted')">
+                    <i data-lucide="lock" class="tab-icon"></i>
+                    <span>Encrypted Records</span>
+                    <span class="tab-count" id="encrypted-count">0</span>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Standard Records Tab -->
+        <div id="standard-tab" class="tab-content active">
         <% if (results.length === 0) { %>
             <div class="empty-state">
-                <i class="lucide-inbox empty-state-icon"></i>
+                <i data-lucide="inbox" class="empty-state-icon"></i>
                 <p>No archive records found</p>
             </div>
         <% } else { %>
@@ -355,23 +506,46 @@
                         <span class="record-id">#<%= record.id %></span>
                         <span class="source-badge <%= record.format === 'Parquet' ? 'source-parquet' : 'source-json' %>">
                             <% if (record.format === 'Parquet') { %>
-                                <i class="lucide-package"></i>
+                                <i data-lucide="package"></i>
                             <% } else { %>
-                                <i class="lucide-file-json"></i>
+                                <i data-lucide="file-json"></i>
                             <% } %>
                             <%= record.source %>
                         </span>
                     </div>
 
                     <a href="https://arweave.net/<%= record.txId %>" target="_blank" class="txid-link">
-                        <i class="lucide-external-link"></i>
+                        <i data-lucide="external-link"></i>
                         <%= record.txId %>
                     </a>
 
                     <div class="metadata">
+                        <% if (record.packageUuid) { %>
+                            <div class="meta-item">
+                                <i data-lucide="key" class="meta-icon"></i>
+                                <div class="meta-content">
+                                    <div class="meta-label">Package UUID</div>
+                                    <div class="meta-value" style="display: flex; align-items: center; gap: 6px;">
+                                        <span class="package-uuid" id="uuid-<%= record.id %>">
+                                            <%= record.packageUuid %>
+                                        </span>
+                                        <button class="copy-btn" onclick="copyUUID('<%= record.packageUuid %>', '<%= record.id %>')" title="Copy UUID" style="min-width: 24px; height: 24px; padding: 4px;">
+                                            <svg id="copy-icon-<%= record.id %>" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                            </svg>
+                                            <svg id="check-icon-<%= record.id %>" style="display: none; color: #10b981;" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <polyline points="20 6 9 17 4 12"></polyline>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        <% } %>
+
                         <% if (record.aircraft_count) { %>
                             <div class="meta-item">
-                                <i class="lucide-plane meta-icon"></i>
+                                <i data-lucide="plane" class="meta-icon"></i>
                                 <div class="meta-content">
                                     <div class="meta-label">Aircraft Count</div>
                                     <div class="meta-value">
@@ -383,7 +557,7 @@
 
                         <% if (record.file_size_kb) { %>
                             <div class="meta-item">
-                                <i class="lucide-hard-drive meta-icon"></i>
+                                <i data-lucide="hard-drive" class="meta-icon"></i>
                                 <div class="meta-content">
                                     <div class="meta-label">File Size</div>
                                     <div class="meta-value"><%= record.file_size_kb %> KB</div>
@@ -392,7 +566,7 @@
                         <% } %>
 
                         <div class="meta-item">
-                            <i class="lucide-clock meta-icon"></i>
+                            <i data-lucide="clock" class="meta-icon"></i>
                             <div class="meta-content">
                                 <div class="meta-label">Timestamp</div>
                                 <div class="meta-value"><%= record.timestamp %></div>
@@ -400,7 +574,7 @@
                         </div>
 
                         <div class="meta-item">
-                            <i class="lucide-calendar meta-icon"></i>
+                            <i data-lucide="calendar" class="meta-icon"></i>
                             <div class="meta-content">
                                 <div class="meta-label">Created At</div>
                                 <div class="meta-value"><%= new Date(record.createdAt).toLocaleString() %></div>
@@ -410,7 +584,7 @@
 
                     <% if (record.icao_addresses && record.icao_addresses.length > 0) { %>
                         <div class="meta-item" style="margin-top: 16px;">
-                            <i class="lucide-hash meta-icon"></i>
+                            <i data-lucide="hash" class="meta-icon"></i>
                             <div class="meta-content">
                                 <div class="meta-label">ICAO Addresses</div>
                                 <div class="aircraft-chips">
@@ -426,22 +600,668 @@
                     <% } %>
                 </div>
             <% }); %>
-
-            <div class="pagination">
-                <% if (previous) { %>
-                    <a href="<%= previous %>">
-                        <i class="lucide-chevron-left"></i>
-                        Previous
-                    </a>
-                <% } %>
-                <% if (next) { %>
-                    <a href="<%= next %>">
-                        Next
-                        <i class="lucide-chevron-right"></i>
-                    </a>
-                <% } %>
-            </div>
         <% } %>
+
+            <!-- Infinite scroll loading indicator -->
+            <div id="loading-more" class="loading" style="display: none; padding: 20px; text-align: center;">
+                <div style="display: inline-block; animation: spin 1s linear infinite;">🔄</div>
+                <span style="margin-left: 10px;">Loading more records...</span>
+            </div>
+
+            <!-- End of records indicator -->
+            <div id="end-of-records" class="loading" style="display: none; padding: 20px; text-align: center; color: #666;">
+                <i data-lucide="check-circle"></i>
+                <span style="margin-left: 10px;">All records loaded</span>
+            </div>
+        </div>
+
+        <!-- Encrypted Records Tab -->
+        <div id="encrypted-tab" class="tab-content">
+            <div class="loading">Loading encrypted records...</div>
+            <div id="encrypted-records"></div>
+
+            <!-- Encrypted infinite scroll loading indicator -->
+            <div id="encrypted-loading-more" class="loading" style="display: none; padding: 20px; text-align: center;">
+                <div style="display: inline-block; animation: spin 1s linear infinite;">🔄</div>
+                <span style="margin-left: 10px;">Loading more encrypted records...</span>
+            </div>
+
+            <!-- Encrypted end indicator -->
+            <div id="encrypted-end-of-records" class="loading" style="display: none; padding: 20px; text-align: center; color: #666;">
+                <i data-lucide="check-circle"></i>
+                <span style="margin-left: 10px;">All encrypted records loaded</span>
+            </div>
+        </div>
+
     </div>
+
+    <script>
+        let encryptedRecordsLoaded = false;
+        let currentEncryptedPage = 0;
+        const limit = 50;
+
+        // Infinite scroll variables
+        let standardOffset = <%= offset + limit %>;
+        let encryptedOffset = 0;
+        let isLoadingStandard = false;
+        let isLoadingEncrypted = false;
+        let hasMoreStandard = <%= next ? 'true' : 'false' %>;
+        let hasMoreEncrypted = true;
+        let currentTab = 'standard';
+
+        // Tab switching function
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.closest('.tab').classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            currentTab = tabName;
+
+            if (tabName === 'standard') {
+                document.getElementById('standard-tab').classList.add('active');
+            } else if (tabName === 'encrypted') {
+                document.getElementById('encrypted-tab').classList.add('active');
+                if (!encryptedRecordsLoaded) {
+                    loadInitialEncryptedRecords();
+                }
+            }
+        }
+
+        // Load initial encrypted records
+        async function loadInitialEncryptedRecords() {
+            const loadingEl = document.querySelector('#encrypted-tab .loading');
+            const recordsEl = document.getElementById('encrypted-records');
+
+            loadingEl.style.display = 'block';
+            recordsEl.innerHTML = '';
+
+            try {
+                const response = await fetch(`/archive/encrypted/all?offset=0&limit=${limit}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await response.json();
+
+                loadingEl.style.display = 'none';
+                document.getElementById('encrypted-count').textContent = data.total;
+
+                if (data.results.length === 0) {
+                    recordsEl.innerHTML = `
+                        <div class="empty-state">
+                            <i data-lucide="inbox" class="empty-state-icon"></i>
+                            <p>No encrypted records found</p>
+                        </div>
+                    `;
+                    hasMoreEncrypted = false;
+                } else {
+                    recordsEl.innerHTML = data.results.map(record => renderRecord(record, true)).join('');
+                    encryptedOffset = limit;
+                    hasMoreEncrypted = data.total > encryptedOffset;
+
+                    if (hasMoreEncrypted) {
+                        document.getElementById('encrypted-end-of-records').style.display = 'none';
+                    } else {
+                        document.getElementById('encrypted-end-of-records').style.display = 'block';
+                    }
+
+                    // Initialize icons
+                    if (typeof lucide !== 'undefined') {
+                        lucide.createIcons();
+                    }
+                }
+
+                encryptedRecordsLoaded = true;
+            } catch (error) {
+                loadingEl.style.display = 'none';
+                recordsEl.innerHTML = `
+                    <div class="empty-state">
+                        <p style="color: #dc3545;">Error loading encrypted records: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Load more standard records (infinite scroll)
+        async function loadMoreStandardRecords() {
+            if (isLoadingStandard || !hasMoreStandard) return;
+
+            isLoadingStandard = true;
+            document.getElementById('loading-more').style.display = 'block';
+            document.getElementById('end-of-records').style.display = 'none';
+
+            try {
+                const response = await fetch(`/archive/all?offset=${standardOffset}&limit=${limit}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (data.results && data.results.length > 0) {
+                    const container = document.getElementById('standard-tab');
+                    const loadingIndicator = document.getElementById('loading-more');
+
+                    data.results.forEach(record => {
+                        const recordHtml = renderRecord(record, false);
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = recordHtml;
+                        container.insertBefore(tempDiv.firstElementChild, loadingIndicator);
+                    });
+
+                    standardOffset += data.results.length;
+                    hasMoreStandard = data.total > standardOffset;
+
+                    // Initialize icons for new records
+                    if (typeof lucide !== 'undefined') {
+                        lucide.createIcons();
+                    }
+                }
+
+                if (!hasMoreStandard) {
+                    document.getElementById('end-of-records').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading more records:', error);
+            } finally {
+                isLoadingStandard = false;
+                document.getElementById('loading-more').style.display = 'none';
+            }
+        }
+
+        // Load more encrypted records (infinite scroll)
+        async function loadMoreEncryptedRecords() {
+            if (isLoadingEncrypted || !hasMoreEncrypted) return;
+
+            isLoadingEncrypted = true;
+            document.getElementById('encrypted-loading-more').style.display = 'block';
+            document.getElementById('encrypted-end-of-records').style.display = 'none';
+
+            try {
+                const response = await fetch(`/archive/encrypted/all?offset=${encryptedOffset}&limit=${limit}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (data.results && data.results.length > 0) {
+                    const container = document.getElementById('encrypted-records');
+                    const loadingIndicator = document.getElementById('encrypted-loading-more');
+
+                    data.results.forEach(record => {
+                        const recordHtml = renderRecord(record, true);
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = recordHtml;
+                        container.appendChild(tempDiv.firstElementChild);
+                    });
+
+                    encryptedOffset += data.results.length;
+                    hasMoreEncrypted = data.total > encryptedOffset;
+
+                    // Initialize icons for new records
+                    if (typeof lucide !== 'undefined') {
+                        lucide.createIcons();
+                    }
+                }
+
+                if (!hasMoreEncrypted) {
+                    document.getElementById('encrypted-end-of-records').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading more encrypted records:', error);
+            } finally {
+                isLoadingEncrypted = false;
+                document.getElementById('encrypted-loading-more').style.display = 'none';
+            }
+        }
+
+        // Infinite scroll handler
+        function handleScroll() {
+            const scrollPosition = window.innerHeight + window.scrollY;
+            const pageHeight = document.documentElement.scrollHeight;
+            const threshold = 500; // Load more when 500px from bottom
+
+            if (scrollPosition >= pageHeight - threshold) {
+                if (currentTab === 'standard') {
+                    loadMoreStandardRecords();
+                } else if (currentTab === 'encrypted') {
+                    loadMoreEncryptedRecords();
+                }
+            }
+        }
+
+        // Throttle scroll events
+        let scrollTimeout;
+        window.addEventListener('scroll', () => {
+            if (scrollTimeout) clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(handleScroll, 100);
+        });
+
+        // Render a single record
+        function renderRecord(record, isEncrypted) {
+            const encryptedBadge = isEncrypted ? '<span style="background: linear-gradient(135deg, #7c3aed, #9333ea); color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="lock" style="width: 12px; height: 12px;"></i>ENCRYPTED</span>' : '';
+            const dataHashRow = isEncrypted && record.dataHash ? `
+                <div class="meta-item">
+                    <i data-lucide="hash" class="meta-icon"></i>
+                    <div class="meta-content">
+                        <div class="meta-label">Data Hash</div>
+                        <div class="meta-value" style="font-family: monospace; font-size: 11px;">${record.dataHash.substring(0, 16)}...</div>
+                    </div>
+                </div>
+            ` : '';
+
+            return `
+                <div class="record">
+                    <div class="record-header">
+                        <span class="record-id">#${record.id}${encryptedBadge}</span>
+                        <span class="source-badge ${record.format === 'Parquet' ? 'source-parquet' : 'source-json'}">
+                            <i data-lucide="${record.format === 'Parquet' ? 'package' : 'file-json'}"></i>
+                            ${record.source}
+                        </span>
+                    </div>
+
+                    <a href="https://arweave.net/${record.txId}" target="_blank" class="txid-link">
+                        <i data-lucide="external-link"></i>
+                        ${record.txId}
+                    </a>
+
+                    <div class="metadata">
+                        ${record.packageUuid ? `
+                            <div class="meta-item">
+                                <i data-lucide="key" class="meta-icon"></i>
+                                <div class="meta-content">
+                                    <div class="meta-label">Package UUID</div>
+                                    <div class="meta-value" style="display: flex; align-items: center; gap: 6px;">
+                                        <span class="package-uuid" id="uuid-${record.id}">
+                                            ${record.packageUuid}
+                                        </span>
+                                        <button class="copy-btn" onclick="copyUUID('${record.packageUuid}', '${record.id}')" title="Copy UUID" style="min-width: 24px; height: 24px; padding: 4px;">
+                                            <svg id="copy-icon-${record.id}" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                            </svg>
+                                            <svg id="check-icon-${record.id}" style="display: none; color: #10b981;" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <polyline points="20 6 9 17 4 12"></polyline>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        ${record.aircraft_count ? `
+                            <div class="meta-item">
+                                <i data-lucide="plane" class="meta-icon"></i>
+                                <div class="meta-content">
+                                    <div class="meta-label">Aircraft Count</div>
+                                    <div class="meta-value">
+                                        <span class="aircraft-count-badge">${record.aircraft_count} aircraft</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        ${record.file_size_kb ? `
+                            <div class="meta-item">
+                                <i data-lucide="hard-drive" class="meta-icon"></i>
+                                <div class="meta-content">
+                                    <div class="meta-label">File Size</div>
+                                    <div class="meta-value">${record.file_size_kb} KB</div>
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        ${dataHashRow}
+
+                        <div class="meta-item">
+                            <i data-lucide="clock" class="meta-icon"></i>
+                            <div class="meta-content">
+                                <div class="meta-label">Timestamp</div>
+                                <div class="meta-value">${record.timestamp}</div>
+                            </div>
+                        </div>
+
+                        <div class="meta-item">
+                            <i data-lucide="calendar" class="meta-icon"></i>
+                            <div class="meta-content">
+                                <div class="meta-label">Created At</div>
+                                <div class="meta-value">${new Date(record.createdAt).toLocaleString()}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${record.icao_addresses && record.icao_addresses.length > 0 ? `
+                        <div class="meta-item" style="margin-top: 16px;">
+                            <i data-lucide="hash" class="meta-icon"></i>
+                            <div class="meta-content">
+                                <div class="meta-label">ICAO Addresses</div>
+                                <div class="aircraft-chips">
+                                    ${record.icao_addresses.slice(0, 10).map(icao => `<span class="aircraft-chip">${icao}</span>`).join('')}
+                                    ${record.icao_addresses.length > 10 ? `<span class="aircraft-chip">+${record.icao_addresses.length - 10} more</span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function copyUUID(uuid, recordId) {
+            // Copy to clipboard
+            navigator.clipboard.writeText(uuid).then(function() {
+                // Show check icon
+                document.getElementById('copy-icon-' + recordId).style.display = 'none';
+                document.getElementById('check-icon-' + recordId).style.display = 'block';
+
+                // Reset after 2 seconds
+                setTimeout(function() {
+                    document.getElementById('copy-icon-' + recordId).style.display = 'block';
+                    document.getElementById('check-icon-' + recordId).style.display = 'none';
+                }, 2000);
+            }).catch(function(err) {
+                // Fallback for older browsers
+                var textArea = document.createElement('textarea');
+                textArea.value = uuid;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+
+                try {
+                    document.execCommand('copy');
+                    // Show check icon
+                    document.getElementById('copy-icon-' + recordId).style.display = 'none';
+                    document.getElementById('check-icon-' + recordId).style.display = 'block';
+
+                    // Reset after 2 seconds
+                    setTimeout(function() {
+                        document.getElementById('copy-icon-' + recordId).style.display = 'block';
+                        document.getElementById('check-icon-' + recordId).style.display = 'none';
+                    }, 2000);
+                } catch (err) {
+                    console.error('Failed to copy UUID:', err);
+                }
+
+                document.body.removeChild(textArea);
+            });
+        }
+
+        // Load encrypted count on page load
+        async function loadEncryptedCount() {
+            try {
+                const response = await fetch('/archive/encrypted/all?offset=0&limit=1');
+                const data = await response.json();
+                document.getElementById('encrypted-count').textContent = data.total;
+            } catch (error) {
+                console.error('Failed to load encrypted count:', error);
+            }
+        }
+
+        // WebSocket connection for real-time updates
+        let socket;
+        let isOnFirstPage = <%= offset === 0 ? 'true' : 'false' %>;
+        let liveUpdatesEnabled = isOnFirstPage;
+        let lastRecordId = <%= results.length > 0 ? results[0].id : 0 %>;
+        let lastEncryptedRecordId = 0;
+        let checkInterval;
+
+        function connectWebSocket() {
+            if (!isOnFirstPage) {
+                console.log('Not on first page, skipping WebSocket connection');
+                return;
+            }
+
+            console.log('Connecting to WebSocket...');
+            socket = io();
+
+            socket.on('connect', () => {
+                console.log('✅ Connected to real-time updates');
+                startPolling();
+            });
+
+            socket.on('stats', (data) => {
+                console.log('📊 Received stats update');
+                if (liveUpdatesEnabled && isOnFirstPage) {
+                    checkForNewRecords();
+                    checkForNewEncryptedRecords();
+                }
+            });
+
+            socket.on('disconnect', () => {
+                console.log('❌ Disconnected from real-time updates');
+                stopPolling();
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('WebSocket connection error:', error);
+            });
+        }
+
+        function startPolling() {
+            console.log('🔄 Starting polling for new records (every 3 seconds)');
+            // Check for new records every 3 seconds
+            checkInterval = setInterval(() => {
+                checkForNewRecords();
+                checkForNewEncryptedRecords();
+            }, 3000);
+            // Also check immediately
+            checkForNewRecords();
+            checkForNewEncryptedRecords();
+        }
+
+        function stopPolling() {
+            if (checkInterval) {
+                clearInterval(checkInterval);
+            }
+        }
+
+        async function checkForNewRecords() {
+            if (!liveUpdatesEnabled || !isOnFirstPage) return;
+
+            try {
+                const response = await fetch('/archive/all?offset=0&limit=10', {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    console.error('API response not OK:', response.status);
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('Fetched data:', data);
+
+                if (data.results && data.results.length > 0) {
+                    const newestId = data.results[0].id;
+                    console.log('Newest ID:', newestId, 'Last ID:', lastRecordId);
+
+                    if (newestId > lastRecordId) {
+                        // Get only new records
+                        const newRecords = data.results.filter(r => r.id > lastRecordId);
+                        console.log('New records to prepend:', newRecords.length);
+                        prependNewRecords(newRecords.reverse());
+                        lastRecordId = newestId;
+
+                        // Update count
+                        document.getElementById('standard-count').textContent = data.total;
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking for new records:', error);
+            }
+        }
+
+        async function checkForNewEncryptedRecords() {
+            if (!liveUpdatesEnabled || !isOnFirstPage) return;
+
+            try {
+                const response = await fetch('/archive/encrypted/all?offset=0&limit=10', {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    console.error('Encrypted API response not OK:', response.status);
+                    return;
+                }
+
+                const data = await response.json();
+
+                // Always update the count, even if tab not loaded yet
+                if (data.total !== undefined) {
+                    document.getElementById('encrypted-count').textContent = data.total;
+                }
+
+                if (data.results && data.results.length > 0) {
+                    const newestId = data.results[0].id;
+
+                    // Initialize lastEncryptedRecordId on first check
+                    if (lastEncryptedRecordId === 0) {
+                        lastEncryptedRecordId = newestId;
+                        console.log('📊 Initialized encrypted record tracking. Last ID:', lastEncryptedRecordId);
+                        return;
+                    }
+
+                    console.log('Newest encrypted ID:', newestId, 'Last encrypted ID:', lastEncryptedRecordId);
+
+                    if (newestId > lastEncryptedRecordId) {
+                        // Only prepend records to DOM if the encrypted tab has been loaded
+                        if (encryptedRecordsLoaded) {
+                            const newRecords = data.results.filter(r => r.id > lastEncryptedRecordId);
+                            console.log('✅ New encrypted records to prepend:', newRecords.length);
+                            prependNewEncryptedRecords(newRecords.reverse());
+                        } else {
+                            console.log('🔔 New encrypted records detected but tab not loaded yet. Count updated.');
+                        }
+
+                        lastEncryptedRecordId = newestId;
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking for new encrypted records:', error);
+            }
+        }
+
+        function prependNewRecords(records) {
+            const container = document.getElementById('standard-tab');
+            if (!container) return;
+
+            // Remove empty state if present
+            const emptyState = container.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            records.forEach(record => {
+                const recordHtml = renderRecord(record, false);
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = recordHtml;
+                const recordElement = tempDiv.firstElementChild;
+
+                // Add animation class
+                recordElement.style.opacity = '0';
+                recordElement.style.transform = 'translateY(-20px)';
+                recordElement.style.transition = 'all 0.3s ease-out';
+
+                // Insert at the beginning (before first record or pagination)
+                const firstRecord = container.querySelector('.record');
+                if (firstRecord) {
+                    container.insertBefore(recordElement, firstRecord);
+                } else {
+                    const pagination = container.querySelector('.pagination');
+                    if (pagination) {
+                        container.insertBefore(recordElement, pagination);
+                    } else {
+                        container.appendChild(recordElement);
+                    }
+                }
+
+                // Trigger animation
+                setTimeout(() => {
+                    recordElement.style.opacity = '1';
+                    recordElement.style.transform = 'translateY(0)';
+                }, 10);
+
+                // Highlight new record briefly
+                recordElement.style.borderColor = '#60a5fa';
+                setTimeout(() => {
+                    recordElement.style.borderColor = '';
+                }, 2000);
+            });
+
+            // Re-initialize Lucide icons for new records
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
+        function prependNewEncryptedRecords(records) {
+            const container = document.getElementById('encrypted-records');
+            if (!container) return;
+
+            // Remove empty state if present
+            const emptyState = container.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            records.forEach(record => {
+                const recordHtml = renderRecord(record, true);
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = recordHtml;
+                const recordElement = tempDiv.firstElementChild;
+
+                // Add animation class
+                recordElement.style.opacity = '0';
+                recordElement.style.transform = 'translateY(-20px)';
+                recordElement.style.transition = 'all 0.3s ease-out';
+
+                // Insert at the beginning
+                const firstRecord = container.querySelector('.record');
+                if (firstRecord) {
+                    container.insertBefore(recordElement, firstRecord);
+                } else {
+                    container.appendChild(recordElement);
+                }
+
+                // Trigger animation
+                setTimeout(() => {
+                    recordElement.style.opacity = '1';
+                    recordElement.style.transform = 'translateY(0)';
+                }, 10);
+
+                // Highlight new record briefly
+                recordElement.style.borderColor = '#7c3aed'; // Purple for encrypted
+                setTimeout(() => {
+                    recordElement.style.borderColor = '';
+                }, 2000);
+            });
+
+            // Re-initialize Lucide icons for new records
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
+        // Live updates are now always enabled on first page
+        // Infinite scroll handles loading more data instead of pagination
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            // Initialize Lucide icons
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+
+            loadEncryptedCount();
+            connectWebSocket();
+        });
+    </script>
 </body>
 </html>

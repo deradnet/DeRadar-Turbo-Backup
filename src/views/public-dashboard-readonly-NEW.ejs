@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <%- include('partials/head', {pageTitle: 'Public Dashboard - DeRadar Turbo'}) %>
+    <%- include('partials/styles') %>
+</head>
+<body class="bg-dark-bg text-dark-text font-sans overflow-hidden" x-data="dashboard()" x-cloak>
+    <%- include('partials/dashboard-core', {isAdmin: false}) %>
+</body>
+</html>

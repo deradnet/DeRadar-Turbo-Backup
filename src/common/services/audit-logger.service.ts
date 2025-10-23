@@ -19,7 +19,7 @@ interface AuditLogEvent {
 @Injectable()
 export class AuditLoggerService {
   private readonly logger = new Logger('AUDIT');
-  private readonly logDir = process.env.AUDIT_LOG_DIR || '/data';
+  private readonly logDir = process.env.AUDIT_LOG_DIR || './database';
   private readonly logPath = join(this.logDir, 'audit.log');
 
   constructor() {
@@ -183,6 +183,39 @@ export class AuditLoggerService {
       ip,
       userAgent,
       details,
+    });
+  }
+
+  logWalletSignatureDebug(
+    walletAddress: string,
+    message: string,
+    clientSignature: string,
+    serverSignature: string,
+    match: boolean,
+  ) {
+    this.writeLog({
+      timestamp: new Date().toISOString(),
+      type: 'WALLET_SIGNATURE_DEBUG',
+      severity: match ? 'info' : 'warning',
+      user: walletAddress,
+      success: match,
+      details: {
+        message,
+        messageLength: message.length,
+        clientSignature: {
+          length: clientSignature.length,
+          first100: clientSignature.substring(0, 100),
+          last50: clientSignature.substring(clientSignature.length - 50),
+          full: clientSignature,
+        },
+        serverSignature: {
+          length: serverSignature.length,
+          first100: serverSignature.substring(0, 100),
+          last50: serverSignature.substring(serverSignature.length - 50),
+          full: serverSignature,
+        },
+        signaturesMatch: match,
+      },
     });
   }
 }

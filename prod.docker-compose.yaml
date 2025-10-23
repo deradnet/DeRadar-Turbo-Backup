@@ -7,7 +7,7 @@ services:
       dockerfile: dockerfiles/prod.Dockerfile
     container_name: prod.derad.app
     volumes:
-      - ./database:/data
+      - ./database:/app/database
       - ./config.yaml:/app/config.yaml
       - ./keys:/app/keys
     ports:

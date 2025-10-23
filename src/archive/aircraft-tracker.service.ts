@@ -8,6 +8,7 @@ import { StatsGateway } from './stats.gateway';
 import * as crypto from 'crypto';
 import * as https from 'https';
 import { Agent } from 'https';
+import { v4 as uuidv4 } from 'uuid';
 
 interface AircraftState {
   hex: string;
@@ -52,14 +53,32 @@ export class AircraftTrackerService {
   private lastFullStatsUpdate = 0;
   private readonly FULL_STATS_CACHE_MS = 500;
 
-  private uploadQueue: Array<{ batch: Array<{ aircraft: any; snapshotTime: number; hex: string }> }> = [];
+  // UNENCRYPTED PIPELINE
+  private uploadQueue: Array<{
+    batch: Array<{ aircraft: any; snapshotTime: number; hex: string }>;
+    packageUuid?: string;
+    batchId?: string;
+  }> = [];
   private activeUploads = 0;
   private readonly MAX_CONCURRENT_UPLOADS = 5;
   private isProcessingQueue = false;
   private uploadProgress: Map<number, { startTime: number; progress: number; status: string }> = new Map();
   private availableSlots: Set<number> = new Set([1, 2, 3, 4, 5]);
 
+  // ENCRYPTED PIPELINE
+  private encryptedUploadQueue: Array<{
+    batch: Array<{ aircraft: any; snapshotTime: number; hex: string }>;
+    packageUuid?: string;
+    batchId?: string;
+  }> = [];
+  private encryptedActiveUploads = 0;
+  private readonly MAX_CONCURRENT_ENCRYPTED_UPLOADS = 5;
+  private isProcessingEncryptedQueue = false;
+  private encryptedUploadProgress: Map<number, { startTime: number; progress: number; status: string }> = new Map();
+  private encryptedAvailableSlots: Set<number> = new Set([1, 2, 3, 4, 5]);
+
   private aircraftBatch: Array<{ aircraft: any; snapshotTime: number; hex: string }> = [];
+  private encryptedAircraftBatch: Array<{ aircraft: any; snapshotTime: number; hex: string }> = [];
   private readonly MAX_AIRCRAFT_PER_BATCH = 30;
 
   private stats = {
@@ -76,13 +95,24 @@ export class AircraftTrackerService {
     currentlyFlying: 0,
   };
 
+  private encryptedStats = {
+    totalUploadsAttempted: 0,
+    totalUploadsSucceeded: 0,
+    totalUploadsFailed: 0,
+    totalRetries: 0,
+  };
+
   private sessionStats = {
     uploadsSucceeded: 0,
+    encryptedUploadsSucceeded: 0,
     pollCycles: 0,
     sessionStartTime: 0,
   };
 
   private currentStatsId: number | null = null;
+
+  // Map to store batch->UUID relationship for syncing encrypted uploads
+  private batchUuidMap = new Map<string, string>();
 
   constructor(
     @InjectRepository(AircraftTrack)
@@ -136,12 +166,20 @@ export class AircraftTrackerService {
         currentlyFlying: 0,
       };
 
+      this.encryptedStats = {
+        totalUploadsAttempted: existingStats.encrypted_uploads_attempted || 0,
+        totalUploadsSucceeded: existingStats.encrypted_uploads_succeeded || 0,
+        totalUploadsFailed: existingStats.encrypted_uploads_failed || 0,
+        totalRetries: existingStats.encrypted_retries || 0,
+      };
+
       await this.systemStatsRepo.update(this.currentStatsId, {
         system_start_time: currentTime,
       });
 
       this.sessionStats = {
         uploadsSucceeded: 0,
+        encryptedUploadsSucceeded: 0,
         pollCycles: 0,
         sessionStartTime: currentTime,
       };
@@ -154,6 +192,10 @@ export class AircraftTrackerService {
         total_uploads_succeeded: 0,
         total_uploads_failed: 0,
         total_retries: 0,
+        encrypted_uploads_attempted: 0,
+        encrypted_uploads_succeeded: 0,
+        encrypted_uploads_failed: 0,
+        encrypted_retries: 0,
         total_new_aircraft: 0,
         total_updates: 0,
         total_reappeared: 0,
@@ -165,6 +207,7 @@ export class AircraftTrackerService {
 
       this.sessionStats = {
         uploadsSucceeded: 0,
+        encryptedUploadsSucceeded: 0,
         pollCycles: 0,
         sessionStartTime: currentTime,
       };
@@ -181,6 +224,10 @@ export class AircraftTrackerService {
         total_uploads_succeeded: this.stats.totalUploadsSucceeded,
         total_uploads_failed: this.stats.totalUploadsFailed,
         total_retries: this.stats.totalRetries,
+        encrypted_uploads_attempted: this.encryptedStats.totalUploadsAttempted,
+        encrypted_uploads_succeeded: this.encryptedStats.totalUploadsSucceeded,
+        encrypted_uploads_failed: this.encryptedStats.totalUploadsFailed,
+        encrypted_retries: this.encryptedStats.totalRetries,
         total_new_aircraft: this.stats.totalNewAircraft,
         total_updates: this.stats.totalUpdates,
         total_reappeared: this.stats.totalReappeared,
@@ -329,6 +376,10 @@ export class AircraftTrackerService {
 
     if (this.aircraftBatch.length > 0) {
       await this.processBatch();
+    }
+
+    if (this.encryptedAircraftBatch.length > 0) {
+      await this.processEncryptedBatch();
     }
 
     const totalChanges = newCount + updatedCount + reappearedCount;
@@ -536,7 +587,9 @@ export class AircraftTrackerService {
   }
 
   private addToBatch(aircraft: any, snapshotTime: number, hex: string) {
+    // Add to BOTH pipelines - upload both encrypted and unencrypted versions
     this.aircraftBatch.push({ aircraft, snapshotTime, hex });
+    this.addToEncryptedBatch(aircraft, snapshotTime, hex);
   }
 
   private async processBatch() {
@@ -556,8 +609,16 @@ export class AircraftTrackerService {
       this.logger.log(`📦 [BATCH] Split ${totalAircraft} aircraft into ${batches.length} batches of max ${this.MAX_AIRCRAFT_PER_BATCH} aircraft (Turbo SDK tag limit)`);
     }
 
-    for (const batch of batches) {
-      this.uploadQueue.push({ batch });
+    // Generate a single UUID for each batch (will be shared between encrypted and unencrypted versions)
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      const packageUuid = uuidv4();
+
+      // Create a unique batch identifier based on timestamp and first aircraft hex
+      const batchId = `${batch[0].snapshotTime}-${batch[0].hex}-${i}`;
+      this.batchUuidMap.set(batchId, packageUuid);
+
+      this.uploadQueue.push({ batch, packageUuid, batchId });
     }
 
     if (batches.length > 0) {
@@ -590,7 +651,7 @@ export class AircraftTrackerService {
 
       this.broadcastStatsUpdate();
 
-      this.executeWithRetry(() => this.uploadBatch(queueItem.batch, slotId), `batch-${Date.now()}`, slotId)
+      this.executeWithRetry(() => this.uploadBatch(queueItem.batch, slotId, queueItem.packageUuid), `batch-${Date.now()}`, slotId)
         .finally(() => {
           this.activeUploads--;
           this.uploadProgress.delete(slotId);
@@ -607,22 +668,110 @@ export class AircraftTrackerService {
     this.isProcessingQueue = false;
   }
 
+  // ==================== ENCRYPTED PIPELINE ====================
+
+  private addToEncryptedBatch(aircraft: any, snapshotTime: number, hex: string) {
+    this.encryptedAircraftBatch.push({ aircraft, snapshotTime, hex });
+  }
+
+  private async processEncryptedBatch() {
+    if (this.encryptedAircraftBatch.length === 0) return;
+
+    const totalAircraft = this.encryptedAircraftBatch.length;
+    const batches: Array<typeof this.encryptedAircraftBatch> = [];
+
+    for (let i = 0; i < this.encryptedAircraftBatch.length; i += this.MAX_AIRCRAFT_PER_BATCH) {
+      const batch = this.encryptedAircraftBatch.slice(i, i + this.MAX_AIRCRAFT_PER_BATCH);
+      batches.push(batch);
+    }
+
+    this.encryptedAircraftBatch = [];
+
+    if (batches.length > 1) {
+      this.logger.log(`🔒 [ENCRYPTED BATCH] Split ${totalAircraft} aircraft into ${batches.length} batches of max ${this.MAX_AIRCRAFT_PER_BATCH} aircraft (Turbo SDK tag limit)`);
+    }
+
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+
+      // Generate the same batch identifier to retrieve the UUID
+      const batchId = `${batch[0].snapshotTime}-${batch[0].hex}-${i}`;
+      const packageUuid = this.batchUuidMap.get(batchId) || uuidv4(); // Use existing UUID or generate new if not found
+
+      this.encryptedUploadQueue.push({ batch, packageUuid, batchId });
+    }
+
+    if (batches.length > 0) {
+      this.broadcastStatsUpdate();
+    }
+
+    this.processEncryptedQueue();
+  }
+
+  private async processEncryptedQueue() {
+    if (this.isProcessingEncryptedQueue) return;
+    this.isProcessingEncryptedQueue = true;
+
+    while (this.encryptedUploadQueue.length > 0 && this.encryptedActiveUploads < this.MAX_CONCURRENT_ENCRYPTED_UPLOADS && this.encryptedAvailableSlots.size > 0) {
+      const queueItem = this.encryptedUploadQueue.shift();
+      if (!queueItem) break;
+
+      const slotId = Array.from(this.encryptedAvailableSlots)[0];
+      this.encryptedAvailableSlots.delete(slotId);
+
+      this.encryptedActiveUploads++;
+      const queueSize = this.encryptedUploadQueue.length;
+      this.logger.debug(`🔒 [ENCRYPTED QUEUE] Processing batch upload in slot ${slotId} (${this.encryptedActiveUploads}/${this.MAX_CONCURRENT_ENCRYPTED_UPLOADS} active, ${queueSize} queued)`);
+
+      this.encryptedUploadProgress.set(slotId, {
+        startTime: Date.now(),
+        progress: 0,
+        status: 'uploading'
+      });
+
+      this.broadcastStatsUpdate();
+
+      this.executeWithRetry(() => this.uploadEncryptedBatch(queueItem.batch, slotId, queueItem.packageUuid), `encrypted-batch-${Date.now()}`, slotId, 1, 5, true)
+        .finally(() => {
+          this.encryptedActiveUploads--;
+          this.encryptedUploadProgress.delete(slotId);
+          this.encryptedAvailableSlots.add(slotId);
+
+          this.broadcastStatsUpdate();
+
+          this.persistStats();
+
+          this.processEncryptedQueue();
+        });
+    }
+
+    this.isProcessingEncryptedQueue = false;
+  }
+
+  // ==================== END ENCRYPTED PIPELINE ====================
+
   private async executeWithRetry(
     uploadFn: () => Promise<void>,
     hex: string,
     slotId?: number,
     attempt: number = 1,
     maxAttempts: number = 5,
+    isEncrypted: boolean = false,
   ): Promise<void> {
     try {
       // Only increment totalUploadsAttempted on the FIRST attempt, not on retries
       // This ensures: totalUploadsAttempted = totalUploadsSucceeded + totalUploadsFailed
       if (attempt === 1) {
-        this.stats.totalUploadsAttempted++;
+        if (isEncrypted) {
+          this.encryptedStats.totalUploadsAttempted++;
+        } else {
+          this.stats.totalUploadsAttempted++;
+        }
       }
 
-      if (slotId && this.uploadProgress.has(slotId)) {
-        const progress = this.uploadProgress.get(slotId);
+      const progressMap = isEncrypted ? this.encryptedUploadProgress : this.uploadProgress;
+      if (slotId && progressMap.has(slotId)) {
+        const progress = progressMap.get(slotId);
         if (progress) {
           progress.progress = 5;
           progress.status = 'uploading';
@@ -631,11 +780,16 @@ export class AircraftTrackerService {
 
       await uploadFn();
 
-      this.stats.totalUploadsSucceeded++;
-      this.sessionStats.uploadsSucceeded++;
+      if (isEncrypted) {
+        this.encryptedStats.totalUploadsSucceeded++;
+        this.sessionStats.encryptedUploadsSucceeded++;
+      } else {
+        this.stats.totalUploadsSucceeded++;
+        this.sessionStats.uploadsSucceeded++;
+      }
 
-      if (slotId && this.uploadProgress.has(slotId)) {
-        const progress = this.uploadProgress.get(slotId);
+      if (slotId && progressMap.has(slotId)) {
+        const progress = progressMap.get(slotId);
         if (progress) {
           progress.progress = 100;
           progress.status = 'completed';
@@ -643,11 +797,16 @@ export class AircraftTrackerService {
       }
     } catch (error) {
       if (attempt >= maxAttempts) {
-        this.stats.totalUploadsFailed++;
+        if (isEncrypted) {
+          this.encryptedStats.totalUploadsFailed++;
+        } else {
+          this.stats.totalUploadsFailed++;
+        }
         this.logger.error(`[RETRY] Failed after ${maxAttempts} attempts for ${hex}: ${error.message}`);
 
-        if (slotId && this.uploadProgress.has(slotId)) {
-          const progress = this.uploadProgress.get(slotId);
+        const progressMap = isEncrypted ? this.encryptedUploadProgress : this.uploadProgress;
+        if (slotId && progressMap.has(slotId)) {
+          const progress = progressMap.get(slotId);
           if (progress) {
             progress.status = 'failed';
           }
@@ -656,23 +815,28 @@ export class AircraftTrackerService {
         return;
       }
 
-      this.stats.totalRetries++;
+      if (isEncrypted) {
+        this.encryptedStats.totalRetries++;
+      } else {
+        this.stats.totalRetries++;
+      }
       const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 16000);
       this.logger.warn(`[RETRY] Attempt ${attempt}/${maxAttempts} failed for ${hex}, retrying in ${backoffMs}ms: ${error.message}`);
 
-      if (slotId && this.uploadProgress.has(slotId)) {
-        const progress = this.uploadProgress.get(slotId);
+      const progressMap = isEncrypted ? this.encryptedUploadProgress : this.uploadProgress;
+      if (slotId && progressMap.has(slotId)) {
+        const progress = progressMap.get(slotId);
         if (progress) {
           progress.status = 'retrying';
         }
       }
 
       await new Promise(resolve => setTimeout(resolve, backoffMs));
-      return this.executeWithRetry(uploadFn, hex, slotId, attempt + 1, maxAttempts);
+      return this.executeWithRetry(uploadFn, hex, slotId, attempt + 1, maxAttempts, isEncrypted);
     }
   }
 
-  private async uploadBatch(batch: Array<{ aircraft: any; snapshotTime: number; hex: string }>, slotId?: number): Promise<void> {
+  private async uploadBatch(batch: Array<{ aircraft: any; snapshotTime: number; hex: string }>, slotId?: number, packageUuid?: string): Promise<void> {
     if (batch.length === 0) return;
 
     const timestamp = batch[0].snapshotTime;
@@ -698,7 +862,7 @@ export class AircraftTrackerService {
         }
       }
 
-      const txId = await this.archiveService.uploadBatchParquet(aircraftList, timestamp);
+      const txId = await this.archiveService.uploadBatchParquet(aircraftList, timestamp, packageUuid);
 
       if (slotId && this.uploadProgress.has(slotId)) {
         const progress = this.uploadProgress.get(slotId);
@@ -764,6 +928,98 @@ export class AircraftTrackerService {
     }
   }
 
+  private async uploadEncryptedBatch(batch: Array<{ aircraft: any; snapshotTime: number; hex: string }>, slotId?: number, packageUuid?: string): Promise<void> {
+    if (batch.length === 0) return;
+
+    const timestamp = batch[0].snapshotTime;
+    const aircraftList = batch.map(item => item.aircraft);
+
+    this.logger.log(`🔒 [ENCRYPTED BATCH] Uploading ${batch.length} aircraft in encrypted batch (slot ${slotId || 'N/A'})`);
+
+    if (slotId && this.encryptedUploadProgress.has(slotId)) {
+      const progress = this.encryptedUploadProgress.get(slotId);
+      if (progress) {
+        progress.progress = 20;
+        this.broadcastStatsUpdate();
+      }
+    }
+
+    try {
+
+      if (slotId && this.encryptedUploadProgress.has(slotId)) {
+        const progress = this.encryptedUploadProgress.get(slotId);
+        if (progress) {
+          progress.progress = 40;
+          this.broadcastStatsUpdate();
+        }
+      }
+
+      const txId = await this.archiveService.uploadBatchParquetEncrypted(aircraftList, timestamp, packageUuid);
+
+      if (slotId && this.encryptedUploadProgress.has(slotId)) {
+        const progress = this.encryptedUploadProgress.get(slotId);
+        if (progress) {
+          progress.progress = 70;
+          this.broadcastStatsUpdate();
+        }
+      }
+
+      this.logger.log(`🔒 [ENCRYPTED BATCH] Uploaded ${batch.length} aircraft → ${txId}`);
+
+      for (const item of batch) {
+        const now = Date.now();
+        const existing = await this.aircraftTrackRepo.findOne({ where: { hex: item.hex } });
+
+        if (existing) {
+
+          existing.last_seen = now;
+          existing.last_uploaded = now;
+          existing.last_tx_id = txId;
+          existing.upload_count += 1;
+          existing.total_updates += 1;
+          existing.callsign = item.aircraft.flight?.trim() || existing.callsign;
+          existing.last_position = {
+            latitude: item.aircraft.lat,
+            longitude: item.aircraft.lon,
+            altitude_baro_ft: item.aircraft.alt_baro,
+          };
+          await this.aircraftTrackRepo.save(existing);
+        } else {
+
+          await this.aircraftTrackRepo.save({
+            hex: item.hex,
+            callsign: item.aircraft.flight?.trim() || null,
+            registration: item.aircraft.r || null,
+            aircraft_type: item.aircraft.t || null,
+            first_seen: now,
+            last_seen: now,
+            last_uploaded: now,
+            last_tx_id: txId,
+            upload_count: 1,
+            total_updates: 0,
+            status: 'active',
+            last_position: {
+              latitude: item.aircraft.lat,
+              longitude: item.aircraft.lon,
+              altitude_baro_ft: item.aircraft.alt_baro,
+            },
+          });
+        }
+      }
+
+      if (slotId && this.encryptedUploadProgress.has(slotId)) {
+        const progress = this.encryptedUploadProgress.get(slotId);
+        if (progress) {
+          progress.progress = 95;
+          this.broadcastStatsUpdate();
+        }
+      }
+    } catch (error) {
+      this.logger.error(`🔒 [ENCRYPTED BATCH] Failed to upload encrypted batch: ${error.message}`);
+      throw error;
+    }
+  }
+
   async getStats() {
     const totalTracks = await this.aircraftTrackRepo.count();
     const cachedAircraft = this.aircraftCache.size;
@@ -811,6 +1067,24 @@ export class AircraftTrackerService {
         })),
       },
 
+      encrypted_queue: {
+        queue_size: this.encryptedUploadQueue.length,
+        active_uploads: this.encryptedActiveUploads,
+        max_concurrent: this.MAX_CONCURRENT_ENCRYPTED_UPLOADS,
+        available_slots: this.MAX_CONCURRENT_ENCRYPTED_UPLOADS - this.encryptedActiveUploads,
+        is_processing: this.isProcessingEncryptedQueue,
+        upload_progress: Array.from(this.encryptedUploadProgress.entries()).map(([slotId, data]) => ({
+          slot_id: slotId,
+          progress: data.progress,
+          status: data.status,
+          elapsed_ms: Date.now() - data.startTime,
+        })),
+        total_attempted: this.encryptedStats.totalUploadsAttempted,
+        total_succeeded: this.encryptedStats.totalUploadsSucceeded,
+        total_failed: this.encryptedStats.totalUploadsFailed,
+        total_retries: this.encryptedStats.totalRetries,
+      },
+
       uploads: {
         total_attempted: this.stats.totalUploadsAttempted,
         total_succeeded: this.stats.totalUploadsSucceeded,
@@ -824,10 +1098,11 @@ export class AircraftTrackerService {
 
       performance: {
         uploads_per_minute: (() => {
-          if (this.sessionStats.uploadsSucceeded === 0) return '0.00';
+          const totalSessionUploads = this.sessionStats.uploadsSucceeded + this.sessionStats.encryptedUploadsSucceeded;
+          if (totalSessionUploads === 0) return '0.00';
           const sessionUptimeSeconds = Math.floor((Date.now() - this.sessionStats.sessionStartTime) / 1000);
           if (sessionUptimeSeconds === 0) return '0.00';
-          return ((this.sessionStats.uploadsSucceeded / sessionUptimeSeconds) * 60).toFixed(2);
+          return ((totalSessionUploads / sessionUptimeSeconds) * 60).toFixed(2);
         })(),
 
         polls_per_minute: (() => {

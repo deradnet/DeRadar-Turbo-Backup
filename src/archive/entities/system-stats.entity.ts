@@ -27,6 +27,18 @@ export class SystemStats {
   total_retries: number;
 
   @Column({ type: 'integer', default: 0 })
+  encrypted_uploads_attempted: number;
+
+  @Column({ type: 'integer', default: 0 })
+  encrypted_uploads_succeeded: number;
+
+  @Column({ type: 'integer', default: 0 })
+  encrypted_uploads_failed: number;
+
+  @Column({ type: 'integer', default: 0 })
+  encrypted_retries: number;
+
+  @Column({ type: 'integer', default: 0 })
   total_new_aircraft: number;
 
   @Column({ type: 'integer', default: 0 })

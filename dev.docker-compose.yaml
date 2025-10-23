@@ -9,8 +9,12 @@ services:
     volumes:
       - ./src:/app/src
       - ./config.yaml:/app/config.yaml
-      - ./database:/app/database
+      - database_data:/app/database
       - ./keys:/app/keys
     environment:
       - NODE_ENV=development
       - APP_VERSION=0.0.1
+
+volumes:
+  database_data:
+    driver: local

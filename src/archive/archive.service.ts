@@ -5,6 +5,7 @@ import * as path from 'path';
 import { TurboFactory } from '@ardrive/turbo-sdk';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ArchiveRecord } from './entities/archive-record.entity';
+import { EncryptedArchiveRecord } from './entities/encrypted-archive-record.entity';
 import { Repository } from 'typeorm';
 import Arweave from 'arweave';
 import { paginate } from '../common/utils/paginate';
@@ -12,6 +13,8 @@ import { Request } from 'express';
 import { TurboAuthenticatedClient } from '@ardrive/turbo-sdk/lib/types/common/turbo';
 import { ConfigService } from '@nestjs/config';
 import * as parquet from 'parquetjs';
+import { v4 as uuidv4 } from 'uuid';
+import { EncryptionService } from '../common/utils/encryption.service';
 
 @Injectable()
 export class ArchiveService {
@@ -21,7 +24,10 @@ export class ArchiveService {
   constructor(
     @InjectRepository(ArchiveRecord)
     private readonly archiveRepo: Repository<ArchiveRecord>,
+    @InjectRepository(EncryptedArchiveRecord)
+    private readonly encryptedArchiveRepo: Repository<EncryptedArchiveRecord>,
     private readonly configService: ConfigService,
+    private readonly encryptionService: EncryptionService,
   ) {
     this.arweave = Arweave.init({
       host: 'arweave.net',
@@ -499,10 +505,15 @@ export class ArchiveService {
   /**
    * Upload batch of aircraft as single Parquet file (max 90KB)
    */
-  async uploadBatchParquet(aircraftList: any[], snapshotTime: number): Promise<string> {
+  async uploadBatchParquet(aircraftList: any[], snapshotTime: number, packageUuid?: string): Promise<string> {
     const tmpDir = os.tmpdir();
     const timestamp = Date.now();
     const filePath = path.join(tmpDir, `batch-${timestamp}.parquet`);
+
+    // Generate UUID if not provided (for backward compatibility)
+    if (!packageUuid) {
+      packageUuid = uuidv4();
+    }
 
     // Validate inputs
     if (!aircraftList || aircraftList.length === 0) {
@@ -655,6 +666,8 @@ export class ArchiveService {
         { name: 'File-Size-KB', value: fileSizeKB },
         { name: 'Data-Format', value: 'aviation-realtime-batch' },
         { name: 'Batch-Timestamp', value: String(snapshotTime) },
+        { name: 'Package-UUID', value: packageUuid },
+        { name: 'Encrypted', value: 'false' },
       ];
 
       // Add individual ICAO tags for each aircraft (max 75 aircraft = ~1500 bytes)
@@ -687,6 +700,7 @@ export class ArchiveService {
           file_size_kb: fileSizeKB,
           format: 'Parquet',
           icao_addresses: icaoList,
+          packageUuid: packageUuid,
         });
 
         // Cleanup temporary file (check existence first to avoid race conditions)
@@ -715,6 +729,240 @@ export class ArchiveService {
     }
   }
 
+  /**
+   * Upload batch of aircraft as ENCRYPTED Parquet file
+   * Uses UUID-based key derivation with HKDF
+   */
+  async uploadBatchParquetEncrypted(aircraftList: any[], snapshotTime: number, packageUuid?: string): Promise<string> {
+    const tmpDir = os.tmpdir();
+    const timestamp = Date.now();
+    const filePath = path.join(tmpDir, `batch-${timestamp}.parquet`);
+
+    // Validate inputs
+    if (!aircraftList || aircraftList.length === 0) {
+      throw new Error('Aircraft list is empty');
+    }
+
+    if (!snapshotTime || snapshotTime <= 0) {
+      throw new Error('Invalid snapshot time');
+    }
+
+    // Use provided UUID or generate new one if not provided
+    if (!packageUuid) {
+      packageUuid = uuidv4();
+    }
+    console.log(`🔒 [ENCRYPTED] Using Package UUID: ${packageUuid}`);
+
+    // Create schema
+    const schema = this.createParquetSchema();
+    const snapshotTimestamp = snapshotTime * 1000;
+
+    // Helper functions (same as unencrypted version)
+    const safeNumber = (value: any): number | null => {
+      if (value === null || value === undefined || value === 'ground') return null;
+      const num = Number(value);
+      return isNaN(num) ? null : num;
+    };
+
+    const safeString = (value: any): string | null => {
+      if (value === null || value === undefined || value === '') return null;
+      return String(value).trim() || null;
+    };
+
+    const safeBoolean = (value: any): boolean | null => {
+      if (value === null || value === undefined) return null;
+      return value === 1 || value === true;
+    };
+
+    const safeInt64 = (value: any): number | null => {
+      if (value === null || value === undefined) return null;
+      const num = Number(value);
+      return isNaN(num) ? null : num;
+    };
+
+    try {
+      // Create Parquet file (same as unencrypted)
+      const writer = await parquet.ParquetWriter.openFile(schema, filePath, {
+        compression: 'SNAPPY',
+      });
+
+      for (const aircraft of aircraftList) {
+        if (!aircraft.hex) continue;
+
+        const row = {
+          snapshot_timestamp: snapshotTimestamp,
+          snapshot_total_messages: aircraftList.length,
+          icao_address: aircraft.hex,
+          callsign: safeString(aircraft.flight),
+          registration: safeString(aircraft.r),
+          aircraft_type: safeString(aircraft.t),
+          type_description: safeString(aircraft.desc),
+          emitter_category: safeString(aircraft.category),
+          latitude: safeNumber(aircraft.lat),
+          longitude: safeNumber(aircraft.lon),
+          position_source: safeString(aircraft.type),
+          altitude_baro_ft: safeNumber(aircraft.alt_baro),
+          altitude_geom_ft: safeNumber(aircraft.alt_geom),
+          vertical_rate_baro_fpm: safeNumber(aircraft.baro_rate),
+          vertical_rate_geom_fpm: safeNumber(aircraft.geom_rate),
+          ground_speed_kts: safeNumber(aircraft.gs),
+          indicated_airspeed_kts: safeNumber(aircraft.ias),
+          true_airspeed_kts: safeNumber(aircraft.tas),
+          mach_number: safeNumber(aircraft.mach),
+          track_degrees: safeNumber(aircraft.track),
+          track_rate_deg_sec: safeNumber(aircraft.track_rate),
+          magnetic_heading_degrees: safeNumber(aircraft.mag_heading),
+          true_heading_degrees: safeNumber(aircraft.true_heading),
+          roll_degrees: safeNumber(aircraft.roll),
+          wind_direction_degrees: safeNumber(aircraft.wd),
+          wind_speed_kts: safeNumber(aircraft.ws),
+          outside_air_temp_c: safeNumber(aircraft.oat),
+          total_air_temp_c: safeNumber(aircraft.tat),
+          nav_qnh_mb: safeNumber(aircraft.nav_qnh),
+          nav_altitude_mcp_ft: safeNumber(aircraft.nav_altitude_mcp),
+          nav_altitude_fms_ft: safeNumber(aircraft.nav_altitude_fms),
+          nav_heading_degrees: safeNumber(aircraft.nav_heading),
+          squawk_code: safeString(aircraft.squawk),
+          emergency_status: safeString(aircraft.emergency),
+          spi_flag: safeBoolean(aircraft.spi),
+          alert_flag: safeBoolean(aircraft.alert),
+          adsb_version: safeNumber(aircraft.version),
+          navigation_integrity_category: safeNumber(aircraft.nic),
+          navigation_accuracy_position: safeNumber(aircraft.nac_p),
+          navigation_accuracy_velocity: safeNumber(aircraft.nac_v),
+          source_integrity_level: safeNumber(aircraft.sil),
+          source_integrity_level_type: safeString(aircraft.sil_type),
+          geometric_vertical_accuracy: safeNumber(aircraft.gva),
+          system_design_assurance: safeNumber(aircraft.sda),
+          nic_baro: safeNumber(aircraft.nic_baro),
+          radius_of_containment: safeNumber(aircraft.rc),
+          messages_received: safeInt64(aircraft.messages),
+          last_seen_seconds: safeNumber(aircraft.seen),
+          last_position_seen_seconds: safeNumber(aircraft.seen_pos),
+          rssi_dbm: safeNumber(aircraft.rssi),
+          distance_from_receiver_nm: safeNumber(aircraft.dst),
+          bearing_from_receiver_degrees: safeNumber(aircraft.dir),
+          database_flags: safeNumber(aircraft.dbFlags),
+        };
+
+        await writer.appendRow(row);
+      }
+
+      await writer.close();
+
+      // ENCRYPT THE FILE
+      const encryptionResult = this.encryptionService.encryptFile(filePath, packageUuid);
+      console.log(`🔒 [ENCRYPTED] Encrypted, hash: ${encryptionResult.dataHash.substring(0, 16)}...`);
+
+      const encryptedFileSize = fs.statSync(encryptionResult.encryptedFilePath).size;
+      const encryptedFileSizeKB = (encryptedFileSize / 1024).toFixed(2);
+
+      const icaoList = aircraftList.map(a => a.hex).filter(Boolean);
+      const callsignList = aircraftList.map(a => a.flight).filter(Boolean);
+      const utcTimestamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+
+      // Helper function to sanitize tag values
+      const sanitizeTagValue = (value: any): string => {
+        if (value === null || value === undefined) return 'unknown';
+        // Remove any special characters that might cause issues
+        return String(value).replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim() || 'unknown';
+      };
+
+      // Build base tags with encryption metadata
+      const baseTags = [
+        { name: 'Content-Type', value: 'application/octet-stream' },
+        { name: 'App-Name', value: 'DeradNetworkBackup' },
+        { name: 'Timestamp', value: utcTimestamp },
+        { name: 'Format', value: 'Parquet' },
+        { name: 'Aircraft-Count', value: String(aircraftList.length) },
+        { name: 'File-Size-KB', value: encryptedFileSizeKB },
+        { name: 'Encrypted', value: 'true' },
+        { name: 'Encryption-Algorithm', value: 'AES-256-GCM' },
+        { name: 'Package-UUID', value: packageUuid },
+        { name: 'Data-Hash', value: encryptionResult.dataHash },
+        { name: 'Schema-Version', value: '2.0' },
+        { name: 'Schema-Type', value: 'batch-aircraft' },
+        { name: 'Data-Format', value: 'aviation-realtime-batch' },
+        { name: 'Batch-Timestamp', value: String(snapshotTime) },
+      ];
+
+      // Add individual ICAO tags for each aircraft
+      const icaoTags = icaoList.map(icao => ({ name: 'ICAO', value: sanitizeTagValue(icao || '') }));
+
+      // Add individual Callsign tags for each aircraft with callsign
+      const callsignTags = callsignList.map(callsign => ({ name: 'Callsign', value: sanitizeTagValue(callsign || '') }));
+
+      // Combine all tags
+      const allTags = [...baseTags, ...icaoTags, ...callsignTags];
+
+      // Upload ENCRYPTED file
+      const { id: txId } = await this.turbo.uploadFile({
+        fileStreamFactory: () => fs.createReadStream(encryptionResult.encryptedFilePath),
+        fileSizeFactory: () => encryptedFileSize,
+        dataItemOpts: { tags: allTags },
+      });
+
+      // Save encrypted record to separate table
+      await this.createEncrypted({
+        txId,
+        source: 'aircraft-parquet-batch',
+        timestamp: utcTimestamp,
+        aircraft_count: aircraftList.length,
+        file_size_kb: encryptedFileSizeKB,
+        format: 'Parquet',
+        icao_addresses: icaoList,
+        packageUuid: packageUuid,
+        dataHash: encryptionResult.dataHash,
+        encryptionAlgorithm: 'AES-256-GCM',
+      });
+
+      // Save metadata to JSON
+      await this.savePackageMetadata({
+        packageUuid,
+        txId,
+        dataHash: encryptionResult.dataHash,
+        timestamp: utcTimestamp,
+        aircraftCount: aircraftList.length,
+        fileSizeKB: encryptedFileSizeKB,
+      });
+
+      // Cleanup
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (fs.existsSync(encryptionResult.encryptedFilePath)) fs.unlinkSync(encryptionResult.encryptedFilePath);
+
+      console.log(`🔒 [ENCRYPTED] Uploaded: ${txId}`);
+      return txId;
+    } catch (error) {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      throw error;
+    }
+  }
+
+  /**
+   * Save package metadata to JSON file in database directory
+   */
+  private async savePackageMetadata(metadata: any): Promise<void> {
+    const databaseDir = './database';
+    const metadataFilePath = path.join(databaseDir, 'package-metadata.json');
+
+    if (!fs.existsSync(databaseDir)) {
+      fs.mkdirSync(databaseDir, { recursive: true });
+    }
+
+    let allMetadata: any[] = [];
+    if (fs.existsSync(metadataFilePath)) {
+      try {
+        allMetadata = JSON.parse(fs.readFileSync(metadataFilePath, 'utf-8'));
+      } catch (e) {
+        allMetadata = [];
+      }
+    }
+
+    allMetadata.push({ ...metadata, createdAt: new Date().toISOString() });
+    fs.writeFileSync(metadataFilePath, JSON.stringify(allMetadata, null, 2), 'utf-8');
+    console.log(`📝 Metadata saved: ${metadataFilePath}`);
+  }
+
   async findAll({
     offset = 0,
     limit = 10,
@@ -724,12 +972,79 @@ export class ArchiveService {
     limit?: number;
     req: Request;
   }) {
-    return paginate(this.archiveRepo, { offset, limit, req });
+    // Get all records with pagination applied directly
+    // Order by ID DESC to ensure consistent ordering (newer records have higher IDs)
+    const [records, total] = await this.archiveRepo.findAndCount({
+      order: { id: 'DESC' },
+      skip: offset,
+      take: limit,
+    });
+
+    // Generate pagination URLs
+    const baseUrl = `${req.protocol}://${req.get('host')}${req.path}`;
+    const previous = offset > 0
+      ? `${baseUrl}?offset=${Math.max(0, offset - limit)}&limit=${limit}`
+      : null;
+    const next = offset + limit < total
+      ? `${baseUrl}?offset=${offset + limit}&limit=${limit}`
+      : null;
+
+    // Return flat structure for backward compatibility
+    return {
+      results: records, // Return flat records array
+      total,
+      offset,
+      limit,
+      previous,
+      next,
+    };
   }
 
   async create(record: Partial<ArchiveRecord>): Promise<ArchiveRecord> {
     const newRecord = this.archiveRepo.create(record);
     return this.archiveRepo.save(newRecord);
+  }
+
+  async createEncrypted(record: Partial<EncryptedArchiveRecord>): Promise<EncryptedArchiveRecord> {
+    const newRecord = this.encryptedArchiveRepo.create(record);
+    return this.encryptedArchiveRepo.save(newRecord);
+  }
+
+  async findAllEncrypted({
+    offset = 0,
+    limit = 10,
+    req,
+  }: {
+    offset?: number;
+    limit?: number;
+    req: Request;
+  }) {
+    // Get all encrypted records with pagination applied directly
+    // Order by ID DESC to ensure consistent ordering (newer records have higher IDs)
+    const [records, total] = await this.encryptedArchiveRepo.findAndCount({
+      order: { id: 'DESC' },
+      skip: offset,
+      take: limit,
+    });
+
+    // Generate pagination URLs
+    const baseUrl = `${req.protocol}://${req.get('host')}${req.path}`;
+    const previous = offset > 0
+      ? `${baseUrl}?offset=${Math.max(0, offset - limit)}&limit=${limit}`
+      : null;
+    const next = offset + limit < total
+      ? `${baseUrl}?offset=${offset + limit}&limit=${limit}`
+      : null;
+
+    // Return flat structure for backward compatibility
+    return {
+      results: records, // Return flat records array
+      total,
+      offset,
+      limit,
+      previous,
+      next,
+    };
   }
 
   async getDataByTX(id: string): Promise<string> {

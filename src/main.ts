@@ -11,6 +11,7 @@ import { existsSync } from 'fs';
 import session from 'express-session';
 import { generateOrInjectSecret } from './common/utils/generate-secret';
 import { ApiEnabledGuard } from './common/guards/api-enabled.guard';
+import { AuditExceptionFilter } from './common/filters/audit-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -29,6 +30,7 @@ async function bootstrap() {
   );
 
   app.useGlobalGuards(app.get(ApiEnabledGuard));
+  app.useGlobalFilters(app.get(AuditExceptionFilter));
   app.use(cookieParser());
   app.use(json({ limit: '100mb' }));
   app.enableCors({ origin: '*' });
@@ -51,6 +53,11 @@ async function bootstrap() {
   app.setBaseViewsDir(viewsPath);
   app.setViewEngine('ejs');
 
+  // Serve static files from views directory
+  app.useStaticAssets(viewsPath, {
+    prefix: '/',
+  });
+
   const config = new DocumentBuilder()
     .setTitle('DeRadar Turbo Backup Engine Documentation')
     .setDescription('DeRadar Turbo Backup Engine')
@@ -58,7 +65,11 @@ async function bootstrap() {
     .addTag('derad')
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('doc', app, document);
+  SwaggerModule.setup('doc', app, document, {
+    swaggerOptions: {
+      defaultModelsExpandDepth: -1, // Hide schemas section
+    },
+  });
 
   await app.listen(8080, '0.0.0.0');
 }

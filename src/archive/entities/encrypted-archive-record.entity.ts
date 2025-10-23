@@ -6,11 +6,11 @@ import {
   Index,
 } from 'typeorm';
 
-@Entity()
-@Index('IDX_archive_package_uuid', ['packageUuid'], {
+@Entity('encrypted_archive_records')
+@Index('IDX_encrypted_package_uuid', ['packageUuid'], {
   unique: false,
 })
-export class ArchiveRecord {
+export class EncryptedArchiveRecord {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -37,6 +37,12 @@ export class ArchiveRecord {
 
   @Column({ nullable: true })
   packageUuid: string; // UUID for encryption key derivation
+
+  @Column({ type: 'text', nullable: true })
+  dataHash: string; // SHA-256 hash of the original data
+
+  @Column({ type: 'text', nullable: true })
+  encryptionAlgorithm: string; // Algorithm used for encryption (e.g., 'AES-256-GCM')
 
   @CreateDateColumn()
   createdAt: Date;
