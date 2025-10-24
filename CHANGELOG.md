@@ -3,6 +3,19 @@
 All notable changes to DeRadar Turbo Backup Engine will be documented in this file.
 
 
+## [2.3.0](https://github.com///compare/v2.2.0...v2.3.0) (2025-10-24)
+
+
+### Features
+
+* add TPS metric with live graph visualization and performance optimizations ([93b11e7](https://github.com///commit/93b11e70767658fffe052663343d7004b0c8c147))
+
+
+### Bug Fixes
+
+* paralel processing key store ([42fd476](https://github.com///commit/42fd476d30d5275c25ef917c3b72f54079174f58))
+* speed and performance optimization ([cf9aeb9](https://github.com///commit/cf9aeb9f8769e23ba8c1147b6bc828778dd55328))
+
 ## [2.2.0](https://github.com///compare/v2.1.0...v2.2.0) (2025-10-24)
 
 
