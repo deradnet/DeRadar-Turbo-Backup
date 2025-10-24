@@ -854,13 +854,19 @@ export class ArchiveService {
       const encryptionResult = this.encryptionService.encryptFile(filePath, packageUuid);
       console.log(`🔒 [ENCRYPTED] Encrypted, hash: ${encryptionResult.dataHash.substring(0, 16)}...`);
 
-      // STORE KEY IN NILDB - await the result to track success
-      const nildbKeySaved = await this.encryptionService.storeKeyInNilDB(packageUuid, encryptionResult.encryptionKey);
-      if (nildbKeySaved) {
-        console.log(`✅ Key stored in nilDB for package ${packageUuid}`);
-      } else {
-        console.warn(`⚠️  nilDB storage failed for package ${packageUuid} (continuing with upload)`);
-      }
+      // STORE KEY IN NILDB - NON-BLOCKING (fire and forget)
+      // This runs in parallel with the Arweave upload to avoid blocking the pipeline
+      this.encryptionService.storeKeyInNilDB(packageUuid, encryptionResult.encryptionKey)
+        .then((nildbKeySaved) => {
+          if (nildbKeySaved) {
+            console.log(`✅ Key stored in nilDB for package ${packageUuid}`);
+          } else {
+            console.warn(`⚠️  nilDB storage failed for package ${packageUuid} (continuing with upload)`);
+          }
+        })
+        .catch((error) => {
+          console.error(`❌ nilDB storage error for package ${packageUuid}:`, error.message);
+        });
 
       const encryptedFileSize = fs.statSync(encryptionResult.encryptedFilePath).size;
       const encryptedFileSizeKB = (encryptedFileSize / 1024).toFixed(2);
@@ -939,7 +945,9 @@ export class ArchiveService {
       if (fs.existsSync(encryptionResult.encryptedFilePath)) fs.unlinkSync(encryptionResult.encryptedFilePath);
 
       console.log(`🔒 [ENCRYPTED] Uploaded: ${txId}`);
-      return { txId, nildbKeySaved };
+      // Note: nilDB storage happens asynchronously, so we can't determine success here
+      // The nildbKeySaved flag is always true to indicate the upload succeeded
+      return { txId, nildbKeySaved: true };
     } catch (error) {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       throw error;

@@ -979,11 +979,12 @@ export class AircraftTrackerService {
       const result = await this.archiveService.uploadBatchParquetEncrypted(aircraftList, timestamp, packageUuid);
       const txId = result.txId;
 
-      // Increment nilDB counter if key was successfully saved
-      if (result.nildbKeySaved) {
-        this.encryptedStats.nildbKeysSaved++;
-        this.logger.log(`✅ nilDB key saved (total: ${this.encryptedStats.nildbKeysSaved})`);
-      }
+      // nilDB key storage happens asynchronously in the background
+      // We increment the counter optimistically since the upload succeeded
+      // (actual nilDB success/failure is logged separately)
+      this.encryptedStats.nildbKeysSaved++;
+      this.logger.log(`🔒 nilDB key storage initiated (total: ${this.encryptedStats.nildbKeysSaved})`);
+
 
       if (slotId && this.encryptedUploadProgress.has(slotId)) {
         const progress = this.encryptedUploadProgress.get(slotId);
