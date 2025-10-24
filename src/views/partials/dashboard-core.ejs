@@ -138,9 +138,12 @@
                         <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-primary/20 hover:border-queue-primary/40 transition-all group cursor-pointer">
                             <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
                                 <i class="icon-trending-up mr-1.5 text-queue-accent group-hover:scale-110 transition-transform"></i>
-                                Uploads/Minute
+                                TPS
                             </div>
-                            <div class="text-4xl font-bold bg-gradient-to-r from-queue-primary to-queue-accent bg-clip-text text-transparent" x-text="animatedStats.uploadsPerMin">0</div>
+                            <div class="text-4xl font-bold bg-gradient-to-r from-queue-primary to-queue-accent bg-clip-text text-transparent" x-text="animatedStats.tps">0</div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                Recorded Peak TPS: <span x-text="stats.peakTps">0.00</span>
+                            </div>
                         </div>
                         <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-primary/20 hover:border-queue-primary/40 transition-all group cursor-pointer">
                             <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
@@ -800,7 +803,8 @@
                     totalAttempts: 0,
                     totalSucceeded: 0,
                     totalFailed: 0,
-                    uploadsPerMin: 0,
+                    tps: 0,
+                    peakTps: 0,
                     totalNew: 0,
                     totalUpdates: 0,
                     totalReappeared: 0,
@@ -851,7 +855,7 @@
                     queueSize: 0,
                     activeUploads: 0,
                     waitingItems: 0,
-                    uploadsPerMin: 0,
+                    tps: 0,
                     pollsPerMin: 0,
                     successRate: 0
                 },
@@ -1510,7 +1514,8 @@
                         totalAttempts: s.uploads.total_attempted || 0,
                         totalSucceeded: s.uploads.total_succeeded || 0,
                         totalFailed: s.uploads.total_failed || 0,
-                        uploadsPerMin: s.performance.uploads_per_minute || 0,
+                        tps: s.performance.tps || 0,
+                        peakTps: s.performance.peak_tps || 0,
                         totalNew: s.aircraft.total_new || 0,
                         totalUpdates: s.aircraft.total_updates || 0,
                         totalReappeared: s.aircraft.total_reappeared || 0,
@@ -1540,7 +1545,7 @@
 
                     const now = Date.now();
                     if (isInitialLoad || (now - this.lastRateUpdate) >= this.rateUpdateInterval) {
-                        this.animateNumber('uploadsPerMin', parseFloat(this.stats.uploadsPerMin) || 0, true, isInitialLoad);
+                        this.animateNumber('tps', parseFloat(this.stats.tps) || 0, true, isInitialLoad);
                         this.animateNumber('pollsPerMin', parseFloat(this.stats.pollsPerMin) || 0, true, isInitialLoad);
                         this.animateNumber('successRate', this.stats.successRate || 0, true, isInitialLoad);
                         this.lastRateUpdate = now;

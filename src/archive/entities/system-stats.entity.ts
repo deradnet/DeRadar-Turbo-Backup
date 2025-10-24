@@ -53,6 +53,9 @@ export class SystemStats {
   @Column({ type: 'integer', default: 0 })
   total_poll_cycles: number;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  peak_tps: number;
+
   @CreateDateColumn()
   created_at: Date;
 

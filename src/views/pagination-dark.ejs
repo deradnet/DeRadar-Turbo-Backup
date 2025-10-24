@@ -1195,6 +1195,16 @@
                 }, 2000);
             });
 
+            // Limit to 100 records to prevent memory leak
+            const allRecords = container.querySelectorAll('.record');
+            if (allRecords.length > 100) {
+                // Remove oldest records (beyond 100)
+                for (let i = 100; i < allRecords.length; i++) {
+                    allRecords[i].remove();
+                }
+                console.log(`🧹 Cleaned up ${allRecords.length - 100} old records (keeping max 100)`);
+            }
+
             // Re-initialize Lucide icons for new records
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
@@ -1243,6 +1253,16 @@
                 }, 2000);
             });
 
+            // Limit to 100 records to prevent memory leak
+            const allRecords = container.querySelectorAll('.record');
+            if (allRecords.length > 100) {
+                // Remove oldest records (beyond 100)
+                for (let i = 100; i < allRecords.length; i++) {
+                    allRecords[i].remove();
+                }
+                console.log(`🧹 Cleaned up ${allRecords.length - 100} old encrypted records (keeping max 100)`);
+            }
+
             // Re-initialize Lucide icons for new records
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
@@ -1251,6 +1271,32 @@
 
         // Live updates are now always enabled on first page
         // Infinite scroll handles loading more data instead of pagination
+
+        // Visibility detection to pause/resume updates when iframe hidden
+        let isPageVisible = true;
+
+        function handleVisibilityChange() {
+            const wasVisible = isPageVisible;
+            isPageVisible = !document.hidden;
+
+            if (!wasVisible && isPageVisible) {
+                // Page became visible - reconnect if needed
+                console.log('📺 Page visible - resuming updates');
+                if (!socket || !socket.connected) {
+                    connectWebSocket();
+                }
+            } else if (wasVisible && !isPageVisible) {
+                // Page became hidden - pause updates
+                console.log('💤 Page hidden - pausing updates');
+                stopPolling();
+                if (socket && socket.connected) {
+                    socket.disconnect();
+                    console.log('🔌 Disconnected WebSocket (page hidden)');
+                }
+            }
+        }
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         // Initialize on page load
         window.addEventListener('DOMContentLoaded', () => {

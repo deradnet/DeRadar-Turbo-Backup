@@ -43,6 +43,7 @@
     "@nestjs/throttler": "^6.4.0",
     "@nestjs/typeorm": "^11.0.0",
     "@nestjs/websockets": "^11.1.6",
+    "@node-rs/xxhash": "^1.7.6",
     "arweave": "^1.15.7",
     "async-mutex": "^0.5.0",
     "better-sqlite3": "^11.10.0",

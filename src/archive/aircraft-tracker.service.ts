@@ -6,10 +6,10 @@ import { SystemStats } from './entities/system-stats.entity';
 import { ArchiveService } from './archive.service';
 import { StatsGateway } from './stats.gateway';
 import { StatsBackupService } from './stats-backup.service';
-import * as crypto from 'crypto';
 import * as https from 'https';
 import { Agent } from 'https';
 import { v4 as uuidv4 } from 'uuid';
+import { xxh64 } from '@node-rs/xxhash';
 
 interface AircraftState {
   hex: string;
@@ -59,6 +59,11 @@ export class AircraftTrackerService {
   private lastTracksCountUpdate = 0;
   private readonly TRACKS_COUNT_CACHE_MS = 5000; // Update every 5 seconds
 
+  // Debounced stats persistence
+  private statsPersistTimer: NodeJS.Timeout | null = null;
+  private statsDirty = false;
+  private readonly STATS_PERSIST_DEBOUNCE_MS = 5000; // Persist every 5 seconds
+
   // UNENCRYPTED PIPELINE
   private uploadQueue: Array<{
     batch: Array<{ aircraft: any; snapshotTime: number; hex: string }>;
@@ -99,6 +104,7 @@ export class AircraftTrackerService {
     lastPollTime: 0,
     totalPollCycles: 0,
     currentlyFlying: 0,
+    peakTps: 0,
   };
 
   private encryptedStats = {
@@ -115,6 +121,19 @@ export class AircraftTrackerService {
     pollCycles: 0,
     sessionStartTime: 0,
   };
+
+  // 60-second sliding window with buckets for TPS calculation
+  // 12 buckets × 5 seconds = 60 seconds total
+  private tpsBuckets: number[] = new Array(12).fill(0);
+  private currentBucketIndex: number = 0;
+  private lastBucketUpdate: number = 0;
+  private readonly BUCKET_SIZE_MS = 5000; // 5 seconds per bucket
+  private readonly TOTAL_BUCKETS = 12; // 12 buckets = 60 seconds
+
+  // TPS history for UI graph (last 30 data points, updated every 3 seconds)
+  private tpsHistory: number[] = new Array(30).fill(0);
+  private lastTpsHistoryUpdate: number = 0;
+  private readonly TPS_HISTORY_INTERVAL_MS = 3000; // 3 seconds
 
   private currentStatsId: number | null = null;
 
@@ -183,6 +202,7 @@ export class AircraftTrackerService {
         lastPollTime: currentTime,
         totalPollCycles: existingStats.total_poll_cycles,
         currentlyFlying: 0,
+        peakTps: parseFloat(existingStats.peak_tps?.toString() || '0'),
       };
 
       this.encryptedStats = {
@@ -236,6 +256,20 @@ export class AircraftTrackerService {
     }
   }
 
+  private scheduleStatsPersist() {
+    this.statsDirty = true;
+
+    if (!this.statsPersistTimer) {
+      this.statsPersistTimer = setTimeout(() => {
+        if (this.statsDirty) {
+          this.persistStats();
+          this.statsDirty = false;
+        }
+        this.statsPersistTimer = null;
+      }, this.STATS_PERSIST_DEBOUNCE_MS);
+    }
+  }
+
   private async persistStats() {
     if (!this.currentStatsId) return;
 
@@ -254,10 +288,73 @@ export class AircraftTrackerService {
         total_updates: this.stats.totalUpdates,
         total_reappeared: this.stats.totalReappeared,
         total_poll_cycles: this.stats.totalPollCycles,
+        peak_tps: this.stats.peakTps,
       });
     } catch (error) {
       this.logger.error(`Failed to persist stats: ${error.message}`);
     }
+  }
+
+  /**
+   * Update TPS buckets
+   * Called on each successful upload
+   */
+  private updateTpsEMA() {
+    const now = Date.now();
+
+    // Initialize on first upload
+    if (this.lastBucketUpdate === 0) {
+      this.lastBucketUpdate = now;
+      this.tpsBuckets[this.currentBucketIndex] = 1;
+      return;
+    }
+
+    // Calculate time elapsed since last bucket update
+    const elapsed = now - this.lastBucketUpdate;
+
+    // Rotate buckets if 5+ seconds have passed
+    if (elapsed >= this.BUCKET_SIZE_MS) {
+      const bucketsToRotate = Math.min(
+        Math.floor(elapsed / this.BUCKET_SIZE_MS),
+        this.TOTAL_BUCKETS
+      );
+
+      // Rotate and clear old buckets
+      for (let i = 0; i < bucketsToRotate; i++) {
+        this.currentBucketIndex = (this.currentBucketIndex + 1) % this.TOTAL_BUCKETS;
+        this.tpsBuckets[this.currentBucketIndex] = 0;
+      }
+
+      this.lastBucketUpdate = now;
+    }
+
+    // Increment current bucket
+    this.tpsBuckets[this.currentBucketIndex]++;
+  }
+
+  /**
+   * Get current TPS from buckets (60-second sliding window)
+   */
+  private getCurrentTps(): number {
+    if (this.lastBucketUpdate === 0) {
+      return 0;
+    }
+
+    // Sum all buckets
+    const totalUploads = this.tpsBuckets.reduce((sum, count) => sum + count, 0);
+
+    // Divide by 60 seconds to get TPS
+    const currentTps = totalUploads / 60;
+
+    // Update TPS history every 3 seconds for UI graph
+    const now = Date.now();
+    if (now - this.lastTpsHistoryUpdate >= this.TPS_HISTORY_INTERVAL_MS) {
+      this.tpsHistory.shift(); // Remove oldest
+      this.tpsHistory.push(currentTps); // Add newest
+      this.lastTpsHistoryUpdate = now;
+    }
+
+    return currentTps;
   }
 
   stopTracking() {
@@ -401,12 +498,19 @@ export class AircraftTrackerService {
 
     this.markMissingAircraftAsOutOfRange(currentHexSet);
 
+    // Process both pipelines in parallel for better throughput
+    const batchPromises: Promise<void>[] = [];
+
     if (this.aircraftBatch.length > 0) {
-      await this.processBatch();
+      batchPromises.push(this.processBatch());
     }
 
     if (this.encryptedAircraftBatch.length > 0) {
-      await this.processEncryptedBatch();
+      batchPromises.push(this.processEncryptedBatch());
+    }
+
+    if (batchPromises.length > 0) {
+      await Promise.all(batchPromises);
     }
 
     const totalChanges = newCount + updatedCount + reappearedCount;
@@ -415,7 +519,7 @@ export class AircraftTrackerService {
 
       this.broadcastStatsUpdate();
 
-      this.persistStats();
+      this.scheduleStatsPersist();
     }
     const processingTime = Date.now() - startTime;
     if (processingTime > 500) {
@@ -515,24 +619,10 @@ export class AircraftTrackerService {
   }
 
   private calculateAircraftHash(aircraft: any): string {
-
-    const significantFields = {
-      lat: aircraft.lat,
-      lon: aircraft.lon,
-      alt_baro: aircraft.alt_baro,
-      alt_geom: aircraft.alt_geom,
-      gs: aircraft.gs,
-      track: aircraft.track,
-      baro_rate: aircraft.baro_rate,
-      squawk: aircraft.squawk,
-      emergency: aircraft.emergency,
-      flight: aircraft.flight,
-    };
-
-    return crypto
-      .createHash('md5')
-      .update(JSON.stringify(significantFields))
-      .digest('hex');
+    // Use xxHash64 for 10x faster hashing (vs MD5)
+    // Direct string concatenation is faster than JSON.stringify
+    const str = `${aircraft.lat}|${aircraft.lon}|${aircraft.alt_baro}|${aircraft.alt_geom}|${aircraft.gs}|${aircraft.track}|${aircraft.baro_rate}|${aircraft.squawk}|${aircraft.emergency}|${aircraft.flight}`;
+    return xxh64(str).toString(16);
   }
 
   private async handleNewAircraft(aircraft: any, snapshotTime: number, hash: string) {
@@ -596,6 +686,7 @@ export class AircraftTrackerService {
 
   private markMissingAircraftAsOutOfRange(currentHexSet: Set<string>) {
     const now = Date.now();
+    const outOfRangeHexes: string[] = [];
 
     for (const [hex, cached] of this.aircraftCache.entries()) {
       if (!currentHexSet.has(hex)) {
@@ -604,12 +695,16 @@ export class AircraftTrackerService {
         if (timeSinceLastSeen > this.REAPPEAR_THRESHOLD_MS) {
           this.logger.debug(`[OUT-OF-RANGE] Aircraft out of range: ${hex}`);
           this.aircraftCache.delete(hex);
-
-          this.aircraftTrackRepo
-            .update({ hex }, { status: 'out_of_range', last_seen: now })
-            .catch((err) => this.logger.error(`Failed to update status for ${hex}: ${err.message}`));
+          outOfRangeHexes.push(hex);
         }
       }
+    }
+
+    // Bulk update all out-of-range aircraft in single query
+    if (outOfRangeHexes.length > 0) {
+      this.aircraftTrackRepo
+        .update({ hex: In(outOfRangeHexes) }, { status: 'out_of_range', last_seen: now })
+        .catch((err) => this.logger.error(`Failed to update out-of-range status: ${err.message}`));
     }
   }
 
@@ -686,7 +781,7 @@ export class AircraftTrackerService {
 
           this.broadcastStatsUpdate();
 
-          this.persistStats();
+          this.scheduleStatsPersist();
 
           this.processQueue();
         });
@@ -766,7 +861,7 @@ export class AircraftTrackerService {
 
           this.broadcastStatsUpdate();
 
-          this.persistStats();
+          this.scheduleStatsPersist();
 
           this.processEncryptedQueue();
         });
@@ -814,6 +909,9 @@ export class AircraftTrackerService {
         this.stats.totalUploadsSucceeded++;
         this.sessionStats.uploadsSucceeded++;
       }
+
+      // Update TPS EMA
+      this.updateTpsEMA();
 
       if (slotId && progressMap.has(slotId)) {
         const progress = progressMap.get(slotId);
@@ -1171,13 +1269,26 @@ export class AircraftTrackerService {
       },
 
       performance: {
-        uploads_per_minute: (() => {
-          const totalSessionUploads = this.sessionStats.uploadsSucceeded + this.sessionStats.encryptedUploadsSucceeded;
-          if (totalSessionUploads === 0) return '0.00';
-          const sessionUptimeSeconds = Math.floor((Date.now() - this.sessionStats.sessionStartTime) / 1000);
-          if (sessionUptimeSeconds === 0) return '0.00';
-          return ((totalSessionUploads / sessionUptimeSeconds) * 60).toFixed(2);
+        tps: (() => {
+          // Get current TPS from EMA
+          const currentTps = this.getCurrentTps();
+
+          // Track peak TPS
+          if (currentTps > this.stats.peakTps) {
+            this.stats.peakTps = currentTps;
+            this.scheduleStatsPersist();
+          }
+
+          // Show rounded number if >= 1, otherwise show 2 decimals
+          return currentTps >= 1 ? Math.round(currentTps).toString() : currentTps.toFixed(2);
         })(),
+
+        peak_tps: (() => {
+          const peak = this.stats.peakTps;
+          return peak >= 1 ? Math.round(peak).toString() : peak.toFixed(2);
+        })(),
+
+        tps_history: this.tpsHistory, // Last 30 TPS values for graph
 
         polls_per_minute: (() => {
           if (this.sessionStats.pollCycles === 0) return '0.00';

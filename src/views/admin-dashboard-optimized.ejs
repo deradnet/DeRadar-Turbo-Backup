@@ -1288,12 +1288,31 @@
                         <h3 class="font-semibold text-white text-sm uppercase tracking-wide">Successful Uploads</h3>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-primary/20 hover:border-queue-primary/40 transition-all group cursor-pointer">
-                            <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
-                                <i class="icon-trending-up mr-1.5 text-queue-accent group-hover:scale-110 transition-transform"></i>
-                                Uploads/Minute
+                        <div class="relative overflow-hidden bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-primary/20 hover:border-queue-primary/40 transition-all group cursor-pointer" id="tps-card" style="transform: rotate(-0.5deg);">
+                            <!-- Background TPS Graph -->
+                            <div class="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
+                                <svg width="100%" height="100%" viewBox="0 0 200 120" preserveAspectRatio="none" class="transform scale-150">
+                                    <path :d="tpsSparkline" fill="none" stroke="url(#tpsGradientBg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <defs>
+                                        <linearGradient id="tpsGradientBg" x1="0%" y1="0%" x2="100%" y2="0%">
+                                            <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+                                            <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:1" />
+                                        </linearGradient>
+                                    </defs>
+                                </svg>
                             </div>
-                            <div class="text-4xl font-bold bg-gradient-to-r from-queue-primary to-queue-accent bg-clip-text text-transparent" x-text="animatedStats.uploadsPerMin">0</div>
+
+                            <!-- Content (on top of background) -->
+                            <div class="relative z-10">
+                                <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
+                                    <i class="icon-trending-up mr-1.5 text-queue-accent group-hover:scale-110 transition-transform"></i>
+                                    TPS
+                                </div>
+                                <div class="text-4xl font-bold bg-gradient-to-r from-queue-primary to-queue-accent bg-clip-text text-transparent transition-all duration-300" x-text="animatedStats.tps >= 1 ? Math.round(animatedStats.tps) : animatedStats.tps.toFixed(2)">0</div>
+                                <div class="text-xs text-gray-500 mt-1">
+                                    Recorded Peak TPS: <span x-text="stats.peakTps >= 1 ? Math.round(stats.peakTps) : stats.peakTps.toFixed(2)" class="text-queue-accent font-semibold">0</span>
+                                </div>
+                            </div>
                         </div>
                         <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-primary/20 hover:border-queue-primary/40 transition-all group cursor-pointer">
                             <div class="flex items-center justify-center text-gray-400 text-xs tracking-wider mb-2 whitespace-nowrap">
@@ -1923,7 +1942,7 @@
             </div>
             <div x-show="currentPage === 'archive'" class="h-full">
                 <div class="bg-dark-card border border-dark-border rounded-lg h-full">
-                    <iframe src="/archive/all" class="w-full h-full bg-dark-bg" frameborder="0"></iframe>
+                    <iframe id="archive-iframe" data-src="/archive/all" class="w-full h-full bg-dark-bg" frameborder="0"></iframe>
                 </div>
             </div>
             <div x-show="currentPage === 'api'" class="h-full">
@@ -1953,7 +1972,8 @@
                     totalAttempts: 0,
                     totalSucceeded: 0,
                     totalFailed: 0,
-                    uploadsPerMin: 0,
+                    tps: 0,
+                    peakTps: 0,
                     totalNew: 0,
                     totalUpdates: 0,
                     totalReappeared: 0,
@@ -2005,7 +2025,7 @@
                     queueSize: 0,
                     activeUploads: 0,
                     waitingItems: 0,
-                    uploadsPerMin: 0,
+                    tps: 0,
                     pollsPerMin: 0,
                     successRate: 0
                 },
@@ -2013,7 +2033,8 @@
                 activeAnimations: {},
 
                 lastRateUpdate: 0,
-                rateUpdateInterval: 3000, 
+                rateUpdateInterval: 3000,
+                tpsHistory: new Array(30).fill(0), // Last 30 TPS data points for graph (from backend) 
                 navigation: [
                     { id: 'dashboard', name: 'Queue Control', icon: 'icon-layout-dashboard' },
                     { id: 'archive', name: 'Data Archive', icon: 'icon-database' },
@@ -2022,6 +2043,35 @@
                 get currentPageName() {
                     const page = this.navigation.find(item => item.id === this.currentPage);
                     return page ? page.name : 'Dashboard';
+                },
+                get tpsSparkline() {
+                    if (this.tpsHistory.length < 2) return '';
+
+                    const width = 200;
+                    const height = 120;
+                    const padding = 10;
+                    const graphHeight = height - (padding * 2);
+
+                    // Adaptive scaling: shows detail during normal operation (4-8 TPS)
+                    // but accommodates spikes (up to 60 TPS)
+                    const currentMax = Math.max(...this.tpsHistory);
+
+                    // Comfortable scale: 2x current max, minimum 15 for detail
+                    const comfortableMax = Math.max(currentMax * 2, 15);
+
+                    // Honor peak TPS if higher than comfortable scale
+                    const effectiveMax = Math.max(comfortableMax, this.stats.peakTps || 0);
+
+                    const points = this.tpsHistory.map((value, index) => {
+                        const x = padding + (index / (this.tpsHistory.length - 1)) * (width - padding * 2);
+                        // Scale from 0 (bottom) to effectiveMax (top)
+                        const normalized = value / effectiveMax;
+                        // Invert Y-axis (SVG coordinate system: 0 is top, height is bottom)
+                        const y = padding + (graphHeight * (1 - normalized));
+                        return `${x},${y}`;
+                    });
+
+                    return `M ${points.join(' L ')}`;
                 },
                 get slotWagons() {
                     const wagons = [];
@@ -2405,7 +2455,8 @@
                     if (startTime) {
                         const duration = (Date.now() - startTime) / 1000;
                         this.uploadCompletionTimes.push(duration);
-                        if (this.uploadCompletionTimes.length > 50) {
+                        // Issue #6: Reduce from 50 to 20 for better memory efficiency
+                        if (this.uploadCompletionTimes.length > 20) {
                             this.uploadCompletionTimes.shift();
                         }
                         this.uploadStartTimes.delete(slotId);
@@ -2415,7 +2466,8 @@
 
                     const now = Date.now();
 
-                    if (now - this.lastCleanupTime < 30000) {
+                    // Issue #7: Reduce cleanup interval from 30s to 10s for more aggressive cleanup
+                    if (now - this.lastCleanupTime < 10000) {
                         return;
                     }
                     this.lastCleanupTime = now;
@@ -2453,7 +2505,20 @@
                         console.log(`🧹 Memory cleanup: Cleaned upload progress data`);
                     }
 
-                    console.log(`📊 Memory stats: successTimestamps=${this.successTimestamps.size}, activeAnimations=${Object.keys(this.activeAnimations).length}, activityLog=${this.activityLog.length}`);
+                    // Issue #9: Cleanup stuck upload start times (older than 5 minutes)
+                    const fiveMinutesAgo = now - (5 * 60 * 1000);
+                    let stuckUploads = 0;
+                    this.uploadStartTimes.forEach((startTime, slotId) => {
+                        if (startTime < fiveMinutesAgo) {
+                            this.uploadStartTimes.delete(slotId);
+                            stuckUploads++;
+                        }
+                    });
+                    if (stuckUploads > 0) {
+                        console.log(`🧹 Memory cleanup: Removed ${stuckUploads} stuck upload timers`);
+                    }
+
+                    console.log(`📊 Memory stats: successTimestamps=${this.successTimestamps.size}, activeAnimations=${Object.keys(this.activeAnimations).length}, activityLog=${this.activityLog.length}, uploadStartTimes=${this.uploadStartTimes.size}`);
                 },
                 checkAuth(response, data) {
 
@@ -2489,20 +2554,29 @@
                         return;
                     }
 
-                    const duration = 600; 
+                    // Smoother, faster animation for TPS (300ms vs 600ms)
+                    const duration = key === 'tps' ? 300 : 600;
                     const startValue = currentValue;
                     const startTime = Date.now();
+
                     const animate = () => {
                         const elapsed = Date.now() - startTime;
                         const progress = Math.min(elapsed / duration, 1);
 
-                        const easeProgress = 1 - Math.pow(1 - progress, 3);
+                        // Better easing function for TPS - smooth in-out cubic
+                        const easeProgress = key === 'tps'
+                            ? (progress < 0.5
+                                ? 4 * progress * progress * progress
+                                : 1 - Math.pow(-2 * progress + 2, 3) / 2)
+                            : 1 - Math.pow(1 - progress, 3);
+
                         const newValue = startValue + (diff * easeProgress);
                         this.animatedStats[key] = isDecimal ? Math.round(newValue * 100) / 100 : Math.round(newValue);
+
                         if (progress < 1) {
                             this.activeAnimations[key] = requestAnimationFrame(animate);
                         } else {
-                            this.animatedStats[key] = targetValue; 
+                            this.animatedStats[key] = targetValue;
                             this.activeAnimations[key] = null;
                         }
                     };
@@ -2664,7 +2738,8 @@
                         totalAttempts: s.uploads.total_attempted || 0,
                         totalSucceeded: s.uploads.total_succeeded || 0,
                         totalFailed: s.uploads.total_failed || 0,
-                        uploadsPerMin: s.performance.uploads_per_minute || 0,
+                        tps: s.performance.tps || 0,
+                        peakTps: s.performance.peak_tps || 0,
                         totalNew: s.aircraft.total_new || 0,
                         totalUpdates: s.aircraft.total_updates || 0,
                         totalReappeared: s.aircraft.total_reappeared || 0,
@@ -2694,10 +2769,15 @@
 
                     const now = Date.now();
                     if (isInitialLoad || (now - this.lastRateUpdate) >= this.rateUpdateInterval) {
-                        this.animateNumber('uploadsPerMin', parseFloat(this.stats.uploadsPerMin) || 0, true, isInitialLoad);
+                        this.animateNumber('tps', parseFloat(this.stats.tps) || 0, true, isInitialLoad);
                         this.animateNumber('pollsPerMin', parseFloat(this.stats.pollsPerMin) || 0, true, isInitialLoad);
                         this.animateNumber('successRate', this.stats.successRate || 0, true, isInitialLoad);
                         this.lastRateUpdate = now;
+
+                        // Update TPS history from backend
+                        if (s.performance.tps_history) {
+                            this.tpsHistory = s.performance.tps_history;
+                        }
                     }
 
                     const previousProgress = this.uploadProgressData || [];
@@ -2786,6 +2866,16 @@
 
                     this.updateEngineSpeed();
 
+                    // Lazy load archive iframe to prevent memory leak
+                    this.$watch('currentPage', (value) => {
+                        if (value === 'archive') {
+                            const iframe = document.getElementById('archive-iframe');
+                            if (iframe && !iframe.src) {
+                                iframe.src = iframe.getAttribute('data-src');
+                            }
+                        }
+                    });
+
                     window.addEventListener('beforeunload', () => this.cleanup());
                 },
                 updateEngineSpeed() {
@@ -2815,30 +2905,35 @@
             const width = canvas.width;
             const height = canvas.height;
 
-            const particles = [];
-            const particleCount = 60; 
+            let particles = [];
+            const particleCount = 60;
 
             for (let i = 0; i < particleCount; i++) {
                 particles.push({
                     x: Math.random() * width,
                     y: Math.random() * height,
-                    size: Math.random() * 3 + 2, 
-                    speedX: (Math.random() - 0.5) * 2, 
-                    speedY: -(Math.random() * 2 + 1), 
+                    size: Math.random() * 3 + 2,
+                    speedX: (Math.random() - 0.5) * 2,
+                    speedY: -(Math.random() * 2 + 1),
                     rotation: Math.random() * 360,
                     rotationSpeed: (Math.random() - 0.5) * 3,
                     opacity: 0,
-                    maxOpacity: Math.random() * 0.7 + 0.3, 
+                    maxOpacity: Math.random() * 0.7 + 0.3,
                     life: 0,
-                    maxLife: Math.random() * 100 + 100, 
-                    delay: Math.random() * 20, 
+                    maxLife: Math.random() * 100 + 100,
+                    delay: Math.random() * 20,
                     color: i % 3 === 0 ? '#a78bfa' : (i % 3 === 1 ? '#8b5cf6' : '#c4b5fd')
                 });
             }
             let frame = 0;
-            const maxFrames = 200; 
+            const maxFrames = 200;
             function animate() {
-                if (frame >= maxFrames) return;
+                if (frame >= maxFrames) {
+                    // Clear particle array to free memory
+                    particles.length = 0;
+                    particles = null;
+                    return;
+                }
                 ctx.clearRect(0, 0, width, height);
                 particles.forEach((p) => {
                     p.life++;
@@ -2891,12 +2986,15 @@
             const ctx = canvas.getContext('2d');
             const width = canvas.width;
             const height = canvas.height;
-            const particles = [];
-            const scanDuration = 40; 
+            let particles = [];
+            const scanDuration = 40;
             let frame = 0;
             function animate() {
                 if (frame >= scanDuration) {
                     ctx.clearRect(0, 0, width, height);
+                    // Clear particle array to free memory
+                    particles.length = 0;
+                    particles = null;
                     return;
                 }
                 ctx.clearRect(0, 0, width, height);
@@ -3014,8 +3112,13 @@
                             dots[i].x = -maxWidth;
                         }
                     }
+                    // Only continue animation loop if engine is running
+                    window.requestAnimationFrame(render);
+                } else {
+                    // Engine stopped - clear canvas and wait before checking again
+                    ctx.clearRect(0, 0, w, h);
+                    setTimeout(render, 500); // Check again in 500ms
                 }
-                window.requestAnimationFrame(render);
             }
             bgg.style.background = "radial-gradient(ellipse at center, hsla(" + hue + ",50%,50%,.8) 0%,rgba(0,0,8,0) 100%)";
             render();

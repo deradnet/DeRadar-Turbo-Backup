@@ -671,8 +671,11 @@ export class ArchiveController {
                     <span class="card-icon">⚡</span>
                     Performance
                 </div>
-                <div class="card-value" id="uploads-per-min">0</div>
-                <div class="card-subtitle">Uploads per Minute</div>
+                <div class="card-value" id="tps">0</div>
+                <div class="card-subtitle">TPS</div>
+                <div class="card-subtitle" style="font-size: 12px; color: #888; margin-top: 4px;">
+                    Recorded Peak TPS: <span id="peak-tps">0.00</span>
+                </div>
                 <div class="stats-grid">
                     <div class="stat-item">
                         <div class="stat-label">Retries</div>
@@ -773,7 +776,8 @@ export class ArchiveController {
             document.getElementById('total-updates').textContent = stats.aircraft.total_updates.toLocaleString();
 
             // Performance
-            document.getElementById('uploads-per-min').textContent = stats.performance.uploads_per_minute;
+            document.getElementById('tps').textContent = stats.performance.tps;
+            document.getElementById('peak-tps').textContent = stats.performance.peak_tps;
             document.getElementById('total-retries').textContent = stats.uploads.total_retries.toLocaleString();
             document.getElementById('changes-per-poll').textContent = stats.performance.changes_per_poll;
         }
