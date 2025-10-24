@@ -5,3 +5,4 @@ node_modules
 test
 database
 dist
+nildb-keystore

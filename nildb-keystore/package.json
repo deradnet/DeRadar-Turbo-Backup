@@ -1,0 +1,30 @@
+{
+  "name": "nildb-keystore-service",
+  "version": "1.0.0",
+  "description": "nilDB Key Storage Microservice",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@nillion/blindfold": "latest",
+    "@nillion/nuc": "latest",
+    "@nillion/secretvaults": "latest",
+    "@noble/curves": "^1.9.2",
+    "dotenv": "^16.5.0",
+    "express": "^4.18.2",
+    "js-yaml": "^4.1.0",
+    "sqlite3": "^5.1.7",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.19.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}

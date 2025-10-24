@@ -733,7 +733,7 @@ export class ArchiveService {
    * Upload batch of aircraft as ENCRYPTED Parquet file
    * Uses UUID-based key derivation with HKDF
    */
-  async uploadBatchParquetEncrypted(aircraftList: any[], snapshotTime: number, packageUuid?: string): Promise<string> {
+  async uploadBatchParquetEncrypted(aircraftList: any[], snapshotTime: number, packageUuid?: string): Promise<{ txId: string; nildbKeySaved: boolean }> {
     const tmpDir = os.tmpdir();
     const timestamp = Date.now();
     const filePath = path.join(tmpDir, `batch-${timestamp}.parquet`);
@@ -854,6 +854,14 @@ export class ArchiveService {
       const encryptionResult = this.encryptionService.encryptFile(filePath, packageUuid);
       console.log(`🔒 [ENCRYPTED] Encrypted, hash: ${encryptionResult.dataHash.substring(0, 16)}...`);
 
+      // STORE KEY IN NILDB - await the result to track success
+      const nildbKeySaved = await this.encryptionService.storeKeyInNilDB(packageUuid, encryptionResult.encryptionKey);
+      if (nildbKeySaved) {
+        console.log(`✅ Key stored in nilDB for package ${packageUuid}`);
+      } else {
+        console.warn(`⚠️  nilDB storage failed for package ${packageUuid} (continuing with upload)`);
+      }
+
       const encryptedFileSize = fs.statSync(encryptionResult.encryptedFilePath).size;
       const encryptedFileSizeKB = (encryptedFileSize / 1024).toFixed(2);
 
@@ -931,7 +939,7 @@ export class ArchiveService {
       if (fs.existsSync(encryptionResult.encryptedFilePath)) fs.unlinkSync(encryptionResult.encryptedFilePath);
 
       console.log(`🔒 [ENCRYPTED] Uploaded: ${txId}`);
-      return txId;
+      return { txId, nildbKeySaved };
     } catch (error) {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       throw error;

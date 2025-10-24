@@ -47,6 +47,35 @@ export class EncryptionService {
   }
 
   /**
+   * Send encryption key to nildb-keystore service
+   * Returns true if successful, false if service is unavailable
+   */
+  async storeKeyInNilDB(packageUuid: string, encryptionKey: Buffer): Promise<boolean> {
+    try {
+      const response = await fetch('http://nildb-keystore:3001/store-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          packageUuid: packageUuid,
+          encryptionKey: encryptionKey.toString('hex'),
+        }),
+      });
+
+      if (!response.ok) {
+        console.error(`Failed to store key in nilDB: ${response.statusText}`);
+        return false;
+      }
+
+      const result = await response.json();
+      console.log(`✅ Key stored in nilDB for package ${packageUuid}, collection: ${result.collectionId}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Failed to communicate with nildb-keystore service:`, error.message);
+      return false;
+    }
+  }
+
+  /**
    * Encrypts a file with UUID-derived key
    * Returns path to encrypted file and metadata
    */
@@ -54,6 +83,7 @@ export class EncryptionService {
     encryptedFilePath: string;
     dataHash: string;
     fileSize: number;
+    encryptionKey: Buffer;
   } {
     // Read plaintext file
     const plaintextData = fs.readFileSync(inputFilePath);
@@ -88,6 +118,7 @@ export class EncryptionService {
       encryptedFilePath: outputFilePath,
       dataHash: dataHash,
       fileSize: encryptedPackage.length,
+      encryptionKey: encryptionKey,
     };
   }
 

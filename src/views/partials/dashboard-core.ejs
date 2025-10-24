@@ -134,7 +134,7 @@
                         <i class="icon-check-circle text-queue-completed mr-2 text-xl"></i>
                         <h3 class="font-semibold text-white text-sm uppercase tracking-wide">Successful Uploads</h3>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-primary/20 hover:border-queue-primary/40 transition-all group cursor-pointer">
                             <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
                                 <i class="icon-trending-up mr-1.5 text-queue-accent group-hover:scale-110 transition-transform"></i>
@@ -162,6 +162,16 @@
                             <div class="flex items-center justify-center">
                                 <div class="text-4xl font-bold text-queue-completed" x-text="animatedStats.successRate.toFixed(1) + '%'">0%</div>
                                 <i class="icon-badge-check ml-2 text-queue-completed text-2xl group-hover:rotate-12 transition-transform"></i>
+                            </div>
+                        </div>
+                        <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-purple-500/30 hover:border-purple-500/50 transition-all group cursor-pointer">
+                            <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
+                                <i class="icon-key mr-1.5 text-purple-400 group-hover:scale-110 transition-transform"></i>
+                                Keys in nilDB
+                            </div>
+                            <div class="flex items-center justify-center">
+                                <div class="text-4xl font-bold text-purple-400" x-text="animatedStats.keysInNilDB.toLocaleString()">0</div>
+                                <i class="icon-shield-check ml-2 text-purple-400 text-2xl group-hover:rotate-12 transition-transform"></i>
                             </div>
                         </div>
                     </div>
@@ -1507,7 +1517,8 @@
                         totalRetries: s.uploads.total_retries || 0,
                         availableSlots: s.queue.available_slots || 0,
                         occupiedSlots: s.queue.max_concurrent - s.queue.available_slots || 0,
-                        waitingItems: s.queue.queue_size || 0
+                        waitingItems: s.queue.queue_size || 0,
+                        keysInNilDB: s.nildb?.keys_saved || 0
                     };
 
                     this.animateNumber('totalTracked', this.stats.totalTracked, false, isInitialLoad);
@@ -1525,6 +1536,7 @@
                     this.animateNumber('queueSize', this.stats.queueSize, false, isInitialLoad);
                     this.animateNumber('activeUploads', this.stats.activeUploads, false, isInitialLoad);
                     this.animateNumber('waitingItems', this.stats.waitingItems, false, isInitialLoad);
+                    this.animateNumber('keysInNilDB', this.stats.keysInNilDB, false, isInitialLoad);
 
                     const now = Date.now();
                     if (isInitialLoad || (now - this.lastRateUpdate) >= this.rateUpdateInterval) {

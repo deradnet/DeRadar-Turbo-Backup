@@ -39,6 +39,9 @@ export class SystemStats {
   encrypted_retries: number;
 
   @Column({ type: 'integer', default: 0 })
+  nildb_keys_saved: number;
+
+  @Column({ type: 'integer', default: 0 })
   total_new_aircraft: number;
 
   @Column({ type: 'integer', default: 0 })

@@ -6,6 +6,7 @@ services:
       context: .
       dockerfile: dockerfiles/prod.Dockerfile
     container_name: prod.derad.app
+    restart: unless-stopped
     volumes:
       - ./database:/app/database
       - ./config.yaml:/app/config.yaml
@@ -14,3 +15,47 @@ services:
       - "9995:8080"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      - nildb-keystore
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "autoheal=true"
+
+  nildb-keystore:
+    build:
+      context: ./nildb-keystore
+      dockerfile: Dockerfile
+    container_name: nildb-keystore
+    restart: unless-stopped
+    volumes:
+      - ./database:/app/database
+      - ./config.yaml:/app/config.yaml
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "autoheal=true"
+
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: autoheal
+    restart: always
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=10
+      - AUTOHEAL_START_PERIOD=100
+      - AUTOHEAL_DEFAULT_STOP_TIMEOUT=10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

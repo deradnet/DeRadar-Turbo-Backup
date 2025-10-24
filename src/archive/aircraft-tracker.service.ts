@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AircraftTrack } from './entities/aircraft-track.entity';
 import { SystemStats } from './entities/system-stats.entity';
 import { ArchiveService } from './archive.service';
 import { StatsGateway } from './stats.gateway';
+import { StatsBackupService } from './stats-backup.service';
 import * as crypto from 'crypto';
 import * as https from 'https';
 import { Agent } from 'https';
@@ -100,6 +101,7 @@ export class AircraftTrackerService {
     totalUploadsSucceeded: 0,
     totalUploadsFailed: 0,
     totalRetries: 0,
+    nildbKeysSaved: 0,
   };
 
   private sessionStats = {
@@ -121,6 +123,8 @@ export class AircraftTrackerService {
     private readonly systemStatsRepo: Repository<SystemStats>,
     private readonly archiveService: ArchiveService,
     private readonly statsGateway: StatsGateway,
+    @Inject(forwardRef(() => StatsBackupService))
+    private readonly statsBackupService: StatsBackupService,
   ) {}
 
   async startTracking() {
@@ -131,7 +135,17 @@ export class AircraftTrackerService {
 
     this.isRunning = true;
 
+    // Try to restore stats from Arweave backup if database is empty
+    if (this.statsBackupService) {
+      await this.statsBackupService.restoreStatsFromBackup();
+    }
+
     await this.loadOrCreateStats();
+
+    // Start automatic backup to Arweave every 5 minutes
+    if (this.statsBackupService) {
+      this.statsBackupService.startAutoBackup();
+    }
 
     this.logger.log('[INIT] Starting real-time aircraft tracking...');
     this.logger.log(`[INFO] Polling interval: ${this.POLL_INTERVAL_MS}ms`);
@@ -171,6 +185,7 @@ export class AircraftTrackerService {
         totalUploadsSucceeded: existingStats.encrypted_uploads_succeeded || 0,
         totalUploadsFailed: existingStats.encrypted_uploads_failed || 0,
         totalRetries: existingStats.encrypted_retries || 0,
+        nildbKeysSaved: existingStats.nildb_keys_saved || 0,
       };
 
       await this.systemStatsRepo.update(this.currentStatsId, {
@@ -196,6 +211,7 @@ export class AircraftTrackerService {
         encrypted_uploads_succeeded: 0,
         encrypted_uploads_failed: 0,
         encrypted_retries: 0,
+        nildb_keys_saved: 0,
         total_new_aircraft: 0,
         total_updates: 0,
         total_reappeared: 0,
@@ -228,6 +244,7 @@ export class AircraftTrackerService {
         encrypted_uploads_succeeded: this.encryptedStats.totalUploadsSucceeded,
         encrypted_uploads_failed: this.encryptedStats.totalUploadsFailed,
         encrypted_retries: this.encryptedStats.totalRetries,
+        nildb_keys_saved: this.encryptedStats.nildbKeysSaved,
         total_new_aircraft: this.stats.totalNewAircraft,
         total_updates: this.stats.totalUpdates,
         total_reappeared: this.stats.totalReappeared,
@@ -242,6 +259,11 @@ export class AircraftTrackerService {
     this.isRunning = false;
     if (this.pollTimer) {
       clearTimeout(this.pollTimer);
+    }
+
+    // Stop automatic backup
+    if (this.statsBackupService) {
+      this.statsBackupService.stopAutoBackup();
     }
 
     const totalRequests = this.fetchStats.total200Responses + this.fetchStats.total304Responses;
@@ -954,7 +976,14 @@ export class AircraftTrackerService {
         }
       }
 
-      const txId = await this.archiveService.uploadBatchParquetEncrypted(aircraftList, timestamp, packageUuid);
+      const result = await this.archiveService.uploadBatchParquetEncrypted(aircraftList, timestamp, packageUuid);
+      const txId = result.txId;
+
+      // Increment nilDB counter if key was successfully saved
+      if (result.nildbKeySaved) {
+        this.encryptedStats.nildbKeysSaved++;
+        this.logger.log(`✅ nilDB key saved (total: ${this.encryptedStats.nildbKeysSaved})`);
+      }
 
       if (slotId && this.encryptedUploadProgress.has(slotId)) {
         const progress = this.encryptedUploadProgress.get(slotId);
@@ -1115,6 +1144,10 @@ export class AircraftTrackerService {
         changes_per_poll: this.stats.totalPollCycles > 0
           ? ((this.stats.totalNewAircraft + this.stats.totalUpdates + this.stats.totalReappeared) / this.stats.totalPollCycles).toFixed(2)
           : '0.00',
+      },
+
+      nildb: {
+        keys_saved: this.encryptedStats.nildbKeysSaved,
       },
     };
   }

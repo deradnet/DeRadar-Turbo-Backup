@@ -848,6 +848,175 @@
                 min-height: 4.5rem !important;
             }
         }
+
+        @media (max-width: 768px) {
+
+            body {
+                overflow-x: hidden;
+                width: 100%;
+            }
+
+            main {
+                overflow-x: hidden !important;
+                width: 100%;
+                max-width: 100vw;
+            }
+
+            .wagon {
+                min-width: 6rem !important;
+                width: 6rem !important;
+                min-height: 6rem !important;
+                height: 6rem !important;
+                padding: 0.5rem 0.25rem !important;
+            }
+
+            .wagon-title {
+                font-size: 0.7rem !important;
+                line-height: 1.3 !important;
+            }
+
+            .wagon-subtitle {
+                font-size: 0.65rem !important;
+                line-height: 1.2 !important;
+            }
+
+            .wagon-label {
+                font-size: 0.6rem !important;
+                padding: 2px 6px !important;
+            }
+
+            .wagon:not([style*="linear-gradient(145deg, #1e3a8a"]) #bg_glow,
+            .wagon:not([style*="linear-gradient(145deg, #1e3a8a"]) #overlay,
+            .wagon:not([style*="linear-gradient(145deg, #1e3a8a"]) #canvas {
+                display: none !important;
+            }
+
+            .wagon img {
+                width: 2.5rem !important;
+                height: 2.5rem !important;
+            }
+
+            .wagon i {
+                font-size: 1.75rem !important;
+            }
+
+            .train-container {
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+                -webkit-overflow-scrolling: touch;
+                scroll-snap-type: x proximity;
+                padding: 1rem 0.5rem !important;
+            }
+
+            .train-container > * {
+                scroll-snap-align: start;
+            }
+
+            /* Dual-pipeline specific mobile optimizations */
+            .flex.gap-4.items-center {
+                gap: 0.5rem !important;
+            }
+
+            .flex.flex-col.gap-2 {
+                gap: 0.5rem !important;
+            }
+
+            .flex.gap-2.items-center {
+                gap: 0.25rem !important;
+            }
+
+            /* ARWEAVE watermark adjustments */
+            [style*="letter-spacing: 0.5rem"] {
+                font-size: 1.5rem !important;
+                letter-spacing: 0.2rem !important;
+            }
+
+            /* Engine sizing on mobile */
+            .flex-shrink-0 .wagon {
+                min-width: 5.5rem !important;
+                width: 5.5rem !important;
+                min-height: 5.5rem !important;
+                height: 5.5rem !important;
+            }
+
+            .train-track {
+                bottom: 1rem !important;
+                height: 2px !important;
+            }
+
+            .metric-card h4 {
+                font-size: 0.75rem !important;
+            }
+
+            .metric-card p {
+                font-size: 0.625rem !important;
+            }
+
+            .metric-card {
+                padding: 0.75rem !important;
+            }
+
+            .text-4xl {
+                font-size: 1.5rem !important;
+            }
+
+            .metric-card .bg-dark-bg\/50 {
+                padding: 0.75rem !important;
+            }
+
+            .space-y-6 {
+                gap: 1rem !important;
+            }
+
+            .group i {
+                font-size: 1rem !important;
+            }
+
+            iframe {
+                border-radius: 0.5rem;
+                min-height: calc(100vh - 8rem);
+            }
+
+            [x-show*="archive"] .bg-dark-card,
+            [x-show*="api"] .bg-dark-card {
+                border: none !important;
+                padding: 0 !important;
+                border-radius: 0.5rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+
+            .wagon {
+                min-width: 5.5rem !important;
+                width: 5.5rem !important;
+                min-height: 5.5rem !important;
+                height: 5.5rem !important;
+                padding: 0.4rem 0.25rem !important;
+            }
+
+            .text-4xl {
+                font-size: 1.25rem !important;
+            }
+
+            .wagon-title {
+                font-size: 0.65rem !important;
+            }
+
+            .wagon-subtitle {
+                font-size: 0.6rem !important;
+            }
+
+            .wagon img {
+                width: 2.25rem !important;
+                height: 2.25rem !important;
+            }
+
+            .wagon i {
+                font-size: 1.5rem !important;
+            }
+        }
+
         .train-track {
             position: absolute;
             bottom: 1.5rem;
@@ -1118,7 +1287,7 @@
                         <i class="icon-check-circle text-queue-completed mr-2 text-xl"></i>
                         <h3 class="font-semibold text-white text-sm uppercase tracking-wide">Successful Uploads</h3>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-primary/20 hover:border-queue-primary/40 transition-all group cursor-pointer">
                             <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
                                 <i class="icon-trending-up mr-1.5 text-queue-accent group-hover:scale-110 transition-transform"></i>
@@ -1127,15 +1296,25 @@
                             <div class="text-4xl font-bold bg-gradient-to-r from-queue-primary to-queue-accent bg-clip-text text-transparent" x-text="animatedStats.uploadsPerMin">0</div>
                         </div>
                         <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-primary/20 hover:border-queue-primary/40 transition-all group cursor-pointer">
-                            <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
+                            <div class="flex items-center justify-center text-gray-400 text-xs tracking-wider mb-2 whitespace-nowrap">
                                 <i class="icon-circle-check mr-1.5 text-queue-primary group-hover:scale-110 transition-transform"></i>
-                                Total Packages
+                                <span class="uppercase">Packages Saved via</span> <img src="/ardrive.webp" alt="Ardrive" class="inline h-3.5 mx-1 opacity-80 group-hover:opacity-100 transition-opacity"> <span class="uppercase">Turbo</span>
                             </div>
                             <div class="flex flex-col">
                                 <div class="text-4xl font-bold text-green-400" x-text="(animatedStats.totalSucceeded + animatedStats.encryptedTotalSucceeded).toLocaleString()">0</div>
                                 <div class="text-xs text-gray-500 mt-1">
                                     <span x-text="animatedStats.totalSucceeded.toLocaleString()">0</span> standard + <span x-text="animatedStats.encryptedTotalSucceeded.toLocaleString()">0</span> encrypted
                                 </div>
+                            </div>
+                        </div>
+                        <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-purple-500/30 hover:border-purple-500/50 transition-all group cursor-pointer">
+                            <div class="flex items-center justify-center text-gray-400 text-xs tracking-wider mb-2">
+                                <i class="icon-key mr-1.5 text-purple-400 group-hover:scale-110 transition-transform"></i>
+                                <span class="uppercase">Keys in</span> <img src="/nillion.png" alt="Nillion" class="inline h-3 mx-1 opacity-80 group-hover:opacity-100 transition-opacity"> <span>nilDB</span>
+                            </div>
+                            <div class="flex items-center justify-center">
+                                <div class="text-4xl font-bold text-purple-400" x-text="animatedStats.keysInNilDB.toLocaleString()">0</div>
+                                <i class="icon-shield-check ml-2 text-purple-400 text-2xl group-hover:rotate-12 transition-transform"></i>
                             </div>
                         </div>
                         <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-completed/30 hover:border-queue-completed/50 transition-all group cursor-pointer">
@@ -1150,15 +1329,15 @@
                         </div>
                     </div>
                 </div>
-                <div class="metric-card p-5 relative">
-                    <div class="flex justify-between items-center mb-2">
+                <div class="metric-card p-5 md:p-5 relative">
+                    <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-2 gap-2">
                         <div>
-                            <h4 class="font-semibold text-white text-sm uppercase tracking-wide">Dual Processing Train</h4>
-                            <p class="text-xs text-gray-500 mt-1">Standard (Blue) + Encrypted (Purple) pipelines running in parallel</p>
+                            <h4 class="font-semibold text-white text-sm md:text-sm uppercase tracking-wide">Dual Processing Train</h4>
+                            <p class="text-xs md:text-xs text-gray-500 mt-1 hidden md:block">Standard (Blue) + Encrypted (Purple) pipelines running in parallel</p>
                         </div>
                         <div class="text-xs text-gray-400">
-                            Standard: <span class="text-queue-primary font-semibold text-base" x-text="stats.maxConcurrent"></span> |
-                            Encrypted: <span class="text-purple-400 font-semibold text-base" x-text="encryptedStats.maxConcurrent"></span> slots
+                            Standard: <span class="text-queue-primary font-semibold text-sm md:text-base" x-text="stats.maxConcurrent"></span> |
+                            Encrypted: <span class="text-purple-400 font-semibold text-sm md:text-base" x-text="encryptedStats.maxConcurrent"></span> slots
                         </div>
                     </div>
 
@@ -1815,6 +1994,7 @@
                     totalAttempts: 0,
                     totalSucceeded: 0,
                     encryptedTotalSucceeded: 0,
+                    keysInNilDB: 0,
                     totalFailed: 0,
                     totalNew: 0,
                     totalUpdates: 0,
@@ -2491,7 +2671,8 @@
                         totalRetries: s.uploads.total_retries || 0,
                         availableSlots: s.queue.available_slots || 0,
                         occupiedSlots: s.queue.max_concurrent - s.queue.available_slots || 0,
-                        waitingItems: s.queue.queue_size || 0
+                        waitingItems: s.queue.queue_size || 0,
+                        keysInNilDB: s.nildb?.keys_saved || 0
                     };
 
                     this.animateNumber('totalTracked', this.stats.totalTracked, false, isInitialLoad);
@@ -2499,6 +2680,7 @@
                     this.animateNumber('totalAttempts', this.stats.totalAttempts, false, isInitialLoad);
                     this.animateNumber('totalSucceeded', this.stats.totalSucceeded, false, isInitialLoad);
                     this.animateNumber('encryptedTotalSucceeded', this.encryptedStats.totalSucceeded || 0, false, isInitialLoad);
+                    this.animateNumber('keysInNilDB', this.stats.keysInNilDB, false, isInitialLoad);
                     this.animateNumber('totalFailed', this.stats.totalFailed, false, isInitialLoad);
                     this.animateNumber('totalNew', this.stats.totalNew, false, isInitialLoad);
                     this.animateNumber('totalUpdates', this.stats.totalUpdates, false, isInitialLoad);

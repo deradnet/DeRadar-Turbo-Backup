@@ -9,6 +9,7 @@ import { SystemStats } from './entities/system-stats.entity';
 import { HttpModule } from '@nestjs/axios';
 import { AircraftTrackerService } from './aircraft-tracker.service';
 import { StatsGateway } from './stats.gateway';
+import { StatsBackupService } from './stats-backup.service';
 import { CommonModule } from '../common/common.module';
 
 @Module({
@@ -17,8 +18,8 @@ import { CommonModule } from '../common/common.module';
     HttpModule,
     CommonModule,
   ],
-  providers: [ArchiveService, AircraftTrackerService, StatsGateway],
+  providers: [ArchiveService, AircraftTrackerService, StatsGateway, StatsBackupService],
   controllers: [ArchiveController],
-  exports: [ArchiveService, AircraftTrackerService],
+  exports: [ArchiveService, AircraftTrackerService, StatsBackupService],
 })
 export class ArchiveModule {}

@@ -1436,7 +1436,7 @@
                         <i class="icon-check-circle text-queue-completed mr-2 text-xl"></i>
                         <h3 class="font-semibold text-white text-sm uppercase tracking-wide">Successful Uploads</h3>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mobile-stack">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 mobile-stack">
                         <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-primary/20 hover:border-queue-primary/40 transition-all group cursor-pointer">
                             <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
                                 <i class="icon-trending-up mr-1.5 text-queue-accent group-hover:scale-110 transition-transform"></i>
@@ -1445,11 +1445,26 @@
                             <div class="text-4xl font-bold bg-gradient-to-r from-queue-primary to-queue-accent bg-clip-text text-transparent" x-text="animatedStats.uploadsPerMin">0</div>
                         </div>
                         <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-primary/20 hover:border-queue-primary/40 transition-all group cursor-pointer">
-                            <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
+                            <div class="flex items-center justify-center text-gray-400 text-xs tracking-wider mb-2 whitespace-nowrap">
                                 <i class="icon-circle-check mr-1.5 text-queue-primary group-hover:scale-110 transition-transform"></i>
-                                Total Success
+                                <span class="uppercase">Packages Saved via</span> <img src="/ardrive.webp" alt="Ardrive" class="inline h-3.5 mx-1 opacity-80 group-hover:opacity-100 transition-opacity"> <span class="uppercase">Turbo</span>
                             </div>
-                            <div class="text-4xl font-bold bg-gradient-to-r from-queue-primary to-queue-accent bg-clip-text text-transparent" x-text="animatedStats.totalSucceeded.toLocaleString()">0</div>
+                            <div class="flex flex-col">
+                                <div class="text-4xl font-bold text-green-400" x-text="(animatedStats.totalSucceeded + animatedStats.encryptedTotalSucceeded).toLocaleString()">0</div>
+                                <div class="text-xs text-gray-500 mt-1">
+                                    <span x-text="animatedStats.totalSucceeded.toLocaleString()">0</span> standard + <span x-text="animatedStats.encryptedTotalSucceeded.toLocaleString()">0</span> encrypted
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-purple-500/30 hover:border-purple-500/50 transition-all group cursor-pointer">
+                            <div class="flex items-center justify-center text-gray-400 text-xs tracking-wider mb-2">
+                                <i class="icon-key mr-1.5 text-purple-400 group-hover:scale-110 transition-transform"></i>
+                                <span class="uppercase">Keys in</span> <img src="/nillion.png" alt="Nillion" class="inline h-3 mx-1 opacity-80 group-hover:opacity-100 transition-opacity"> <span>nilDB</span>
+                            </div>
+                            <div class="flex items-center justify-center">
+                                <div class="text-4xl font-bold text-purple-400" x-text="animatedStats.keysInNilDB.toLocaleString()">0</div>
+                                <i class="icon-shield-check ml-2 text-purple-400 text-2xl group-hover:rotate-12 transition-transform"></i>
+                            </div>
                         </div>
                         <div class="bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-completed/30 hover:border-queue-completed/50 transition-all group cursor-pointer">
                             <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
@@ -1464,54 +1479,53 @@
                     </div>
                 </div>
 
-                <!-- Train Visualization -->
-                <div class="metric-card p-5 md:p-5 relative">
-                    <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-2 gap-2">
+                <div class="metric-card p-5 relative">
+                    <div class="flex justify-between items-center mb-2">
                         <div>
-                            <h4 class="font-semibold text-white text-sm md:text-sm uppercase tracking-wide">Processing Train</h4>
-                            <p class="text-xs md:text-xs text-gray-500 mt-1 hidden md:block">Real-time upload pipeline visualization</p>
+                            <h4 class="font-semibold text-white text-sm uppercase tracking-wide">Dual Processing Train</h4>
+                            <p class="text-xs text-gray-500 mt-1 hidden md:block">Standard (Blue) + Encrypted (Purple) pipelines running in parallel</p>
                         </div>
                         <div class="text-xs text-gray-400">
-                            Capacity: <span class="text-queue-primary font-semibold text-sm md:text-base" x-text="stats.maxConcurrent"></span> slots
+                            Standard: <span class="text-queue-primary font-semibold text-base" x-text="stats.maxConcurrent"></span> |
+                            Encrypted: <span class="text-purple-400 font-semibold text-base" x-text="encryptedStats.maxConcurrent"></span> slots
                         </div>
                     </div>
 
-                    <!-- Train Wagons -->
-                    <div class="train-container relative" x-ref="trainContainer">
-                        <div class="train-track"></div>
-                        <!-- Locomotive -->
-                        <div class="wagon p-2 pb-3 flex flex-col items-center justify-between w-[7rem] h-[7rem] relative"
-                             style="background: linear-gradient(145deg, #1e3a8a, #1e40af); border: 1px solid #3b82f6; border-radius: 0.5rem; overflow: hidden;">
-                            <div class="wagon-label text-blue-300">ENGINE</div>
-
-                            <!-- Canvas Glow Effect -->
-                            <div id="bg_glow"></div>
-                            <div id="overlay"></div>
-                            <canvas id="canvas"></canvas>
-
-                            <!-- Logo -->
-                            <div class="flex flex-col justify-center items-center w-full flex-1 relative pt-4" style="z-index: 10;">
-                                <img src="https://brand-kit.derad.net/derad-network-brand-kit/icon-outlines/white.png" alt="DeRadar" class="w-12 h-12 object-contain">
-                            </div>
-
-                            <div class="w-full relative z-10">
-                                <div class="text-[0.65rem] text-gray-300 mb-0.5 flex justify-between items-center">
-                                    <span>Power:</span>
-                                    <span :class="stats.isRunning ? 'text-queue-completed font-bold' : 'text-queue-failed font-bold'"
-                                          x-text="stats.isRunning ? 'ON' : 'OFF'"></span>
+                    <!-- GRID LAYOUT: ENGINE | SLOTS AREA | SUCCESS -->
+                    <div class="flex gap-4 items-center">
+                        <!-- LEFT: ENGINE -->
+                        <div class="flex-shrink-0">
+                            <!-- ENGINE -->
+                            <div class="wagon p-2 pb-3 flex flex-col items-center justify-between w-[7rem] h-[7rem] relative"
+                                 style="background: linear-gradient(145deg, #1e3a8a, #1e40af); border: 1px solid #3b82f6; border-radius: 0.5rem; overflow: hidden;">
+                                <div class="wagon-label text-blue-300">ENGINE</div>
+                                <div id="bg_glow"></div>
+                                <div id="overlay"></div>
+                                <canvas id="canvas"></canvas>
+                                <div class="flex flex-col justify-center items-center w-full flex-1 relative pt-4" style="z-index: 10;">
+                                    <img src="https://brand-kit.derad.net/derad-network-brand-kit/icon-outlines/white.png" alt="DeRadar" class="w-12 h-12 object-contain">
                                 </div>
-                                <div class="progress-bar h-1.5">
-                                    <div class="progress-fill"
-                                         :class="stats.isRunning ? 'bg-queue-completed' : 'bg-queue-failed'"
-                                         :style="`width: ${stats.isRunning ? 100 : 0}%`"></div>
+                                <div class="w-full relative z-10">
+                                    <div class="text-[0.65rem] text-gray-300 mb-0.5 flex justify-between items-center">
+                                        <span>Power:</span>
+                                        <span :class="stats.isRunning ? 'text-queue-completed font-bold' : 'text-queue-failed font-bold'"
+                                              x-text="stats.isRunning ? 'ON' : 'OFF'"></span>
+                                    </div>
+                                    <div class="progress-bar h-1.5">
+                                        <div class="progress-fill"
+                                             :class="stats.isRunning ? 'bg-queue-completed' : 'bg-queue-failed'"
+                                             :style="`width: ${stats.isRunning ? 100 : 0}%`"></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- No connector between engine and queue -->
-
-                        <!-- Waiting Wagons (Always show exactly 2 queue spaces) -->
-                        <template x-for="(wagon, index) in waitingWagons" :key="'waiting-' + wagon.id">
+                        <!-- MIDDLE & RIGHT: SLOTS AND SUCCESS (2 ROWS) -->
+                        <div class="flex-1 flex flex-col gap-2">
+                            <!-- STANDARD ROW: SLOTS + SUCCESS -->
+                            <div class="flex gap-2 items-center">
+                                <div class="train-container relative flex-1">
+                                <template x-for="(wagon, index) in waitingWagons" :key="'waiting-' + wagon.id">
                             <>
                                 <div class="wagon wagon-waiting p-2 pb-3 flex flex-col items-center justify-between w-[7rem] h-[7rem] relative"
                                      :class="{
@@ -1573,11 +1587,7 @@
                                 </div>
                             </>
                         </template>
-
-                        <!-- Connector between queue and slots -->
                         <div class="wagon-connector" x-show="waitingWagons.length > 0 && slotWagons.length > 0"></div>
-
-                        <!-- Slot Wagons (Available/Occupied) -->
                         <template x-for="(wagon, index) in slotWagons" :key="'slot-' + wagon.id">
                             <>
                                 <div class="wagon wagon-slot p-2 pb-3 flex flex-col items-center justify-between w-[7rem] h-[7rem] relative"
@@ -1595,8 +1605,13 @@
                                         <div class="text-[0.625rem] mt-0.5 leading-none w-full" style="text-align: center !important;" :class="wagon.isOccupied ? 'text-green-300' : 'text-gray-400'" x-text="wagon.subtitle"></div>
                                     </div>
                                     <div class="w-full">
-                                        <div class="text-[0.65rem] mb-0.5" :class="wagon.isOccupied ? 'text-green-200' : 'text-gray-400'">
+                                        <div class="text-[0.65rem] mb-1 flex justify-between items-center" :class="wagon.isOccupied ? 'text-green-200' : 'text-gray-400'">
                                             <span x-text="wagon.statusText"></span>
+                                            <!-- ArDrive Icon above progress bar - right aligned, bigger -->
+                                            <div x-show="wagon.isOccupied"
+                                                 class="w-7 h-7 rounded overflow-hidden border border-blue-400/50 shadow-sm">
+                                                <img src="ardrive.webp" alt="ArDrive" class="w-full h-full object-cover">
+                                            </div>
                                         </div>
                                         <div class="progress-bar h-1.5">
                                             <div class="progress-fill transition-all duration-500"
@@ -1607,40 +1622,177 @@
                                 </div>
                             </>
                         </template>
+                                </div>
+                            </div>
 
-                        <!-- Connector between slots and success wagons -->
-                        <div class="wagon-connector" x-show="slotWagons.length > 0 && successWagons.length > 0"></div>
-
-                        <!-- Success Wagons - MATRIX BRRR EDITION -->
-                        <template x-for="(wagon, index) in successWagons" :key="wagon.uploadId">
+                            <!-- ENCRYPTED ROW: SLOTS + SUCCESS -->
+                            <div class="flex gap-2 items-center">
+                                <div class="train-container relative flex-1" x-ref="encryptedTrainContainer">
+                                    <!-- ENCRYPTED WAITING WAGONS -->
+                        <template x-for="(wagon, index) in encryptedWaitingWagons" :key="'encrypted-waiting-' + wagon.id">
                             <>
-                                <div class="wagon wagon-success p-2 pb-3 flex flex-col items-center justify-between w-[7rem] h-[7rem] relative"
-                                     :class="{'wagon-new-arrival': wagon.isNew}">
-
-                                    <!-- Scanner beam effect (CSS animation) - only for new wagons -->
-                                    <div class="scanner-beam"></div>
-
-                                    <!-- Data stream effect (CSS animation) -->
-                                    <div class="data-stream"></div>
-
-                                    <div class="wagon-label text-purple-200">SUCCESS</div>
-                                    <div class="relative z-20 flex flex-col justify-center items-center w-full flex-1 py-2" style="text-align: center;">
-                                        <div class="text-xs font-bold text-white leading-none" style="margin: 0 auto;" x-text="wagon.title"></div>
-                                        <div class="text-[0.625rem] text-purple-200 mt-0.5 leading-none" style="margin: 0 auto;" x-text="wagon.subtitle"></div>
+                                <div class="wagon wagon-waiting p-2 pb-3 flex flex-col items-center justify-between w-[7rem] h-[7rem] relative"
+                                     :class="{
+                                         'queued': wagon.type === 'queued',
+                                         'empty': wagon.type === 'empty',
+                                         'more': wagon.type === 'more',
+                                         'overflow': wagon.type === 'overflow'
+                                     }"
+                                     style="border-color: #7c3aed;">
+                                    <div class="wagon-label font-semibold"
+                                         :class="{
+                                             'text-white': wagon.type !== 'empty',
+                                             'text-gray-500': wagon.type === 'empty'
+                                         }"
+                                         :style="wagon.type !== 'empty' && wagon.type !== 'overflow' ? 'background: rgba(88, 28, 135, 0.9);' : wagon.type === 'overflow' ? 'background: rgba(153, 27, 27, 0.9);' : ''">
+                                        <span x-text="wagon.type === 'empty' ? 'EMPTY' : wagon.type === 'more' ? 'MORE' : wagon.type === 'overflow' ? 'OVERFLOW' : 'QUEUE'"></span>
                                     </div>
-                                    <div class="w-full relative z-20">
-                                        <div class="text-[0.65rem] text-purple-200 mb-0.5 flex justify-between items-center">
+                                    <div class="text-center flex flex-col justify-center items-center w-full flex-1 pt-7 pb-2">
+                                        <div class="wagon-title font-bold text-xs leading-none w-full"
+                                             style="text-align: center !important;"
+                                             :class="{
+                                                 'text-white': wagon.type !== 'empty',
+                                                 'text-gray-500': wagon.type === 'empty',
+                                                 'text-[0.625rem]': wagon.title && wagon.title.length > 10
+                                             }"
+                                             x-text="wagon.title"></div>
+                                        <div class="wagon-subtitle mt-0.5 text-[0.625rem] leading-none w-full"
+                                             style="text-align: center !important;"
+                                             :class="{
+                                                 'text-purple-200': wagon.type !== 'empty',
+                                                 'text-gray-600': wagon.type === 'empty'
+                                             }"
+                                             x-text="wagon.subtitle"></div>
+                                    </div>
+                                    <div class="w-full">
+                                        <div class="text-[0.65rem] mb-0.5 flex justify-between items-center"
+                                             :class="{
+                                                 'text-white': wagon.type !== 'empty',
+                                                 'text-gray-500': wagon.type === 'empty'
+                                             }">
                                             <span x-text="wagon.statusText"></span>
-                                            <span class="font-bold text-sm">✓</span>
+                                            <span class="font-bold px-1 py-0.5 rounded bg-purple-900 text-[0.65rem]"
+                                                  x-show="wagon.type === 'queued'"
+                                                  x-text="wagon.waitTime"></span>
                                         </div>
-                                        <div class="progress-bar h-1.5">
-                                            <div class="progress-fill bg-gradient-to-r from-purple-500 to-purple-400 transition-all duration-500"
+                                        <div class="progress-bar h-1.5"
+                                             :class="{
+                                                 'bg-purple-900': wagon.type !== 'empty' && wagon.type !== 'overflow',
+                                                 'bg-gray-800': wagon.type === 'empty',
+                                                 'bg-orange-900': wagon.type === 'overflow'
+                                             }">
+                                            <div class="progress-fill transition-all duration-500"
+                                                 :class="{
+                                                     'bg-purple-400': wagon.type !== 'overflow',
+                                                     'bg-orange-400 animate-pulse': wagon.type === 'overflow'
+                                                 }"
                                                  :style="`width: ${wagon.progress}%`"></div>
                                         </div>
                                     </div>
                                 </div>
                             </>
                         </template>
+                        <div class="wagon-connector" x-show="encryptedWaitingWagons.length > 0 && encryptedSlotWagons.length > 0" style="background: linear-gradient(to right, #4b5563, #7c3aed);"></div>
+                        <template x-for="(wagon, index) in encryptedSlotWagons" :key="'encrypted-slot-' + wagon.id">
+                            <>
+                                <div class="wagon wagon-slot p-2 pb-3 flex flex-col items-center justify-between w-[7rem] h-[7rem] relative"
+                                     :class="{
+                                         'occupied': wagon.isOccupied,
+                                         'completed-blink': wagon.isCompleted
+                                     }"
+                                     :style="wagon.isOccupied ?
+                                         'background: linear-gradient(145deg, #7e22ce, #9333ea); border: 1px solid #9333ea;' :
+                                         'border-color: #7c3aed;'">
+                                    <div class="wagon-label"
+                                         :class="wagon.isOccupied ? 'text-purple-200' : 'text-purple-500'">
+                                        <span x-text="wagon.isOccupied ? 'ACTIVE' : 'SLOT'"></span>
+                                    </div>
+                                    <div class="text-center flex flex-col justify-center items-center w-full flex-1 pt-7 pb-2">
+                                        <div class="text-xs font-bold text-white leading-none w-full" style="text-align: center !important;" x-text="wagon.title"></div>
+                                        <div class="text-[0.625rem] mt-0.5 leading-none w-full" style="text-align: center !important;"
+                                             :class="wagon.isOccupied ? 'text-purple-300' : 'text-gray-400'" x-text="wagon.subtitle"></div>
+                                    </div>
+                                    <div class="w-full">
+                                        <div class="text-[0.65rem] mb-1 flex justify-between items-center"
+                                             :class="wagon.isOccupied ? 'text-purple-200' : 'text-gray-400'">
+                                            <span x-text="wagon.statusText"></span>
+                                            <!-- ArDrive and Nillion Icons above progress bar - right aligned -->
+                                            <div x-show="wagon.isOccupied" class="flex gap-1">
+                                                <div class="w-7 h-7 rounded overflow-hidden border border-purple-400/50 shadow-sm">
+                                                    <img src="ardrive.webp" alt="ArDrive" class="w-full h-full object-cover">
+                                                </div>
+                                                <div class="w-7 h-7 rounded overflow-hidden border border-blue-400/50 shadow-sm">
+                                                    <img src="nillion.png" alt="Nillion" class="w-full h-full object-cover">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="progress-bar h-1.5">
+                                            <div class="progress-fill transition-all duration-500"
+                                                 :class="wagon.isOccupied ? 'bg-purple-500' : 'bg-gray-600'"
+                                                 :style="`width: ${wagon.isOccupied ? wagon.progress : 0}%`"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        </template>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- SHARED SUCCESS LINE (BELOW BOTH TRAINS) -->
+                        <div class="mt-0 relative overflow-hidden" style="min-height: 8rem; position: relative;">
+                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none" style="z-index: 10;">
+                                <div class="text-4xl font-bold text-white/15 whitespace-nowrap" style="letter-spacing: 0.5rem;">
+                                    ARWEAVE
+                                </div>
+                            </div>
+                            <div class="train-container relative overflow-x-auto overflow-y-hidden" style="z-index: 1; max-width: 100%;">
+                                <template x-for="(wagon, index) in allSuccessWagons" :key="wagon.id">
+                                    <div class="wagon wagon-success p-2 pb-3 flex flex-col items-center justify-between w-[7rem] h-[7rem] relative"
+                                         :class="{'wagon-new-arrival': wagon.isNew}"
+                                         :style="wagon.type === 'encrypted' ?
+                                             'background: linear-gradient(145deg, rgba(126, 34, 206, 0.5), rgba(147, 51, 234, 0.5)); border: 1px solid #9333ea; opacity: 0.5;' :
+                                             'background: linear-gradient(145deg, rgba(5, 150, 105, 0.5), rgba(16, 185, 129, 0.5)); border: 1px solid #10b981; opacity: 0.5;'">
+                                        <div class="scanner-beam"></div>
+                                        <div class="data-stream"></div>
+                                        <div class="wagon-label"
+                                             :class="wagon.type === 'encrypted' ? 'text-purple-200' : 'text-green-200'">
+                                            <template x-if="wagon.type === 'encrypted'">
+                                                <span><i class="icon-lock mr-1 text-xs"></i>ENCRYPTED</span>
+                                            </template>
+                                            <template x-if="wagon.type === 'standard'">
+                                                <span>SUCCESS</span>
+                                            </template>
+                                        </div>
+                                        <div class="relative z-20 flex flex-col justify-center items-center w-full flex-1 py-2" style="text-align: center;">
+                                            <div class="text-xs font-bold text-white leading-none" style="margin: 0 auto;" x-text="wagon.title"></div>
+                                            <div class="text-[0.625rem] mt-0.5 leading-none" style="margin: 0 auto;"
+                                                 :class="wagon.type === 'encrypted' ? 'text-purple-200' : 'text-green-200'"
+                                                 x-text="wagon.subtitle"></div>
+                                        </div>
+                                        <div class="w-full relative z-20">
+                                            <div class="text-[0.65rem] mb-0.5 flex justify-between items-center"
+                                                 :class="wagon.type === 'encrypted' ? 'text-purple-200' : 'text-green-200'">
+                                                <span x-text="wagon.statusText"></span>
+                                                <template x-if="wagon.type === 'encrypted'">
+                                                    <i class="icon-lock text-purple-300 text-sm"></i>
+                                                </template>
+                                                <template x-if="wagon.type === 'standard'">
+                                                    <span class="font-bold text-sm">✓</span>
+                                                </template>
+                                            </div>
+                                            <div class="progress-bar h-1.5">
+                                                <div class="progress-fill transition-all duration-500"
+                                                     :class="wagon.type === 'encrypted' ? 'bg-gradient-to-r from-purple-400 to-purple-500' : 'bg-gradient-to-r from-green-400 to-green-500'"
+                                                     :style="`width: ${wagon.progress}%`"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+
+                        </div>
                     </div>
                 </div>
 
@@ -1975,6 +2127,7 @@
                     inCache: 0,
                     totalAttempts: 0,
                     totalSucceeded: 0,
+                    keysInNilDB: 0,
                     totalFailed: 0,
                     uploadsPerMin: 0,
                     totalNew: 0,
@@ -1985,6 +2138,15 @@
                     occupiedSlots: 0,
                     waitingItems: 0
                 },
+                encryptedStats: {
+                    queueSize: 0,
+                    activeUploads: 0,
+                    maxConcurrent: 5,
+                    availableSlots: 5,
+                    occupiedSlots: 0,
+                    waitingItems: 0,
+                    totalSucceeded: 0
+                },
                 activityLog: [],
                 intervals: [],
                 socket: null,
@@ -1994,16 +2156,24 @@
                 lastSuccessCount: 0,
                 newSuccessIds: new Set(),
                 successTimestamps: new Map(), 
-                uploadProgressData: [], 
-                uploadCompletionTimes: [], 
-                uploadStartTimes: new Map(), 
-                lastCleanupTime: Date.now(), 
+                uploadProgressData: [],
+                uploadCompletionTimes: [],
+                uploadStartTimes: new Map(),
+                lastCleanupTime: Date.now(),
+                encryptedUploadProgressData: [],
+                encryptedUploadStartTimes: new Map(),
+                lastEncryptedSuccessCount: 0,
+                newEncryptedSuccessIds: new Set(),
+                encryptedSuccessTimestamps: new Map(),
+                encryptedUploadCompletionTimes: [],
 
                 animatedStats: {
                     totalTracked: 0,
                     currentlyActive: 0,
                     totalAttempts: 0,
                     totalSucceeded: 0,
+                    encryptedTotalSucceeded: 0,
+                    keysInNilDB: 0,
                     totalFailed: 0,
                     totalNew: 0,
                     totalUpdates: 0,
@@ -2199,6 +2369,191 @@
                         });
                     }
                     return wagons;
+                },
+
+                get encryptedSlotWagons() {
+                    const wagons = [];
+                    for (let i = 1; i <= this.encryptedStats.maxConcurrent; i++) {
+                        const progressInfo = this.encryptedUploadProgressData.find(p => p.slot_id === i);
+                        const isOccupied = (i <= this.encryptedStats.occupiedSlots) && (progressInfo || i <= this.encryptedStats.activeUploads);
+                        let actualProgress = 0;
+                        let statusText = 'Ready';
+
+                        if (isOccupied && progressInfo) {
+                            const baseProgress = progressInfo.progress;
+                            const elapsedMs = progressInfo.elapsed_ms || 0;
+                            const status = progressInfo.status;
+
+                            const ESTIMATED_TOTAL_MS = 4000;
+                            if (status === 'uploading') {
+                                const timeProgress = Math.min(95, (elapsedMs / ESTIMATED_TOTAL_MS) * 100);
+                                actualProgress = Math.max(baseProgress, Math.floor(timeProgress));
+                                statusText = actualProgress + '%';
+                            } else if (status === 'retrying') {
+                                actualProgress = baseProgress;
+                                statusText = 'Retry';
+                            } else if (status === 'completed') {
+                                actualProgress = 100;
+                                statusText = 'Done';
+                            } else {
+                                actualProgress = baseProgress;
+                                statusText = baseProgress + '%';
+                            }
+                        } else if (isOccupied && !progressInfo) {
+                            actualProgress = 5;
+                            statusText = 'Starting';
+                        } else {
+                            actualProgress = 0;
+                            statusText = 'Ready';
+                        }
+
+                        wagons.push({
+                            id: 'encrypted-slot-' + i,
+                            title: 'Slot ' + i,
+                            subtitle: isOccupied ? 'Encrypting' : 'Available',
+                            statusText: statusText,
+                            progress: actualProgress,
+                            isOccupied: isOccupied,
+                            isCompleted: status === 'completed'
+                        });
+                    }
+                    return wagons;
+                },
+
+                get encryptedWaitingWagons() {
+                    const wagons = [];
+                    const totalWaiting = this.encryptedStats.waitingItems || 0;
+                    const avgUploadTimeSeconds = this.getAverageUploadTime();
+                    const activeSlots = this.encryptedStats.activeUploads || 0;
+                    const availableSlots = Math.max(1, this.encryptedStats.maxConcurrent - activeSlots);
+
+                    if (totalWaiting === 0) {
+                        wagons.push({
+                            id: 'encrypted-empty-queue',
+                            icon: 'icon-inbox',
+                            color: 'rgba(124, 58, 237, 0.3)',
+                            title: 'Empty',
+                            subtitle: 'No queue',
+                            statusText: 'Available',
+                            waitTime: '-',
+                            progress: 0,
+                            type: 'empty'
+                        });
+                    } else if (totalWaiting >= 1 && totalWaiting <= 10) {
+                        const estimatedWaitSeconds = this.calculateRealisticWaitTime(1, avgUploadTimeSeconds, availableSlots, activeSlots);
+                        const seconds = Math.max(1, estimatedWaitSeconds);
+                        const waitTimeDisplay = (seconds % 1 === 0 ? seconds : seconds.toFixed(1)) + 's';
+                        wagons.push({
+                            id: 'encrypted-queue-count',
+                            icon: 'icon-clock',
+                            color: 'rgba(124, 58, 237, 0.5)',
+                            title: totalWaiting.toString(),
+                            subtitle: totalWaiting === 1 ? 'item' : 'items',
+                            statusText: 'In queue',
+                            waitTime: waitTimeDisplay,
+                            progress: Math.min(95, totalWaiting * 10),
+                            type: 'queued'
+                        });
+                    } else if (totalWaiting > 10) {
+                        const estimatedWaitSeconds = this.calculateRealisticWaitTime(1, avgUploadTimeSeconds, availableSlots, activeSlots);
+                        const seconds = Math.max(1, estimatedWaitSeconds);
+                        const waitTimeDisplay = (seconds % 1 === 0 ? seconds : seconds.toFixed(1)) + 's';
+                        wagons.push({
+                            id: 'encrypted-queue-overflow',
+                            icon: 'icon-alert-triangle',
+                            color: 'rgba(239, 68, 68, 0.5)',
+                            title: totalWaiting.toString(),
+                            subtitle: totalWaiting === 1 ? 'item' : 'items',
+                            statusText: 'Overload!',
+                            waitTime: waitTimeDisplay,
+                            progress: 100,
+                            type: 'overflow'
+                        });
+                    }
+
+                    return wagons;
+                },
+
+                get encryptedSuccessWagons() {
+                    const wagons = [];
+                    const maxSuccessWagons = Math.min(5, this.encryptedStats.totalSucceeded);
+                    const now = Date.now();
+
+                    let newWagonIndex = 0;
+                    for (let i = 1; i <= maxSuccessWagons; i++) {
+                        const uploadId = this.encryptedStats.totalSucceeded - i + 1;
+                        const shouldAnimate = this.newEncryptedSuccessIds.has(uploadId);
+
+                        if (!this.encryptedSuccessTimestamps.has(uploadId)) {
+                            const estimatedSecondsAgo = (i - 1) * 2;
+                            this.encryptedSuccessTimestamps.set(uploadId, now - (estimatedSecondsAgo * 1000));
+                        }
+
+                        let timeAgo = 'Just now';
+                        const wagonTimestamp = this.encryptedSuccessTimestamps.get(uploadId);
+                        if (wagonTimestamp) {
+                            const secondsAgo = Math.floor((now - wagonTimestamp) / 1000);
+
+                            if (secondsAgo < 60) {
+                                timeAgo = secondsAgo === 0 ? 'Just now' : secondsAgo + 's ago';
+                            } else if (secondsAgo < 3600) {
+                                const minutes = Math.floor(secondsAgo / 60);
+                                timeAgo = minutes + 'm ago';
+                            } else {
+                                const hours = Math.floor(secondsAgo / 3600);
+                                timeAgo = hours + 'h ago';
+                            }
+                        }
+
+                        wagons.push({
+                            id: 'encrypted-success-' + uploadId,
+                            uploadId: uploadId,
+                            icon: 'icon-check-circle',
+                            color: '#a78bfa',
+                            title: 'Upload #' + uploadId,
+                            subtitle: timeAgo,
+                            statusText: 'Encrypted',
+                            progress: 100,
+                            isNew: shouldAnimate,
+                            animationIndex: shouldAnimate ? newWagonIndex++ : -1,
+                            type: 'encrypted',
+                            timestamp: wagonTimestamp || (now - (i - 1) * 2000)
+                        });
+                    }
+                    return wagons;
+                },
+
+                // Merged success wagons for single timeline
+                get allSuccessWagons() {
+                    const standard = this.successWagons.map(w => ({
+                        ...w,
+                        type: 'standard',
+                        timestamp: this.successTimestamps.get(w.uploadId) || Date.now()
+                    }));
+                    const encrypted = this.encryptedSuccessWagons;
+
+                    // Merge and sort by timestamp (most recent first)
+                    return [...standard, ...encrypted]
+                        .sort((a, b) => b.timestamp - a.timestamp)
+                        .slice(0, 10); // Limit to 10 total wagons
+                },
+
+                trackEncryptedSuccesses() {
+                    if (this.encryptedStats.totalSucceeded > this.lastEncryptedSuccessCount) {
+                        const newCount = this.encryptedStats.totalSucceeded - this.lastEncryptedSuccessCount;
+                        const now = Date.now();
+
+                        for (let i = 0; i < newCount; i++) {
+                            const newId = this.encryptedStats.totalSucceeded - i;
+                            this.newEncryptedSuccessIds.add(newId);
+                            this.encryptedSuccessTimestamps.set(newId, now);
+
+                            setTimeout(() => {
+                                this.newEncryptedSuccessIds.delete(newId);
+                            }, 800);
+                        }
+                        this.lastEncryptedSuccessCount = this.encryptedStats.totalSucceeded;
+                    }
                 },
 
                 trackNewSuccesses() {
@@ -2525,13 +2880,16 @@
                         totalRetries: s.uploads.total_retries || 0,
                         availableSlots: s.queue.available_slots || 0,
                         occupiedSlots: s.queue.max_concurrent - s.queue.available_slots || 0,
-                        waitingItems: s.queue.queue_size || 0
+                        waitingItems: s.queue.queue_size || 0,
+                        keysInNilDB: s.nildb?.keys_saved || 0
                     };
 
                     this.animateNumber('totalTracked', this.stats.totalTracked, false, isInitialLoad);
                     this.animateNumber('currentlyActive', this.stats.currentlyActive, false, isInitialLoad);
                     this.animateNumber('totalAttempts', this.stats.totalAttempts, false, isInitialLoad);
                     this.animateNumber('totalSucceeded', this.stats.totalSucceeded, false, isInitialLoad);
+                    this.animateNumber('encryptedTotalSucceeded', this.encryptedStats.totalSucceeded || 0, false, isInitialLoad);
+                    this.animateNumber('keysInNilDB', this.stats.keysInNilDB, false, isInitialLoad);
                     this.animateNumber('totalFailed', this.stats.totalFailed, false, isInitialLoad);
                     this.animateNumber('totalNew', this.stats.totalNew, false, isInitialLoad);
                     this.animateNumber('totalUpdates', this.stats.totalUpdates, false, isInitialLoad);
@@ -2567,6 +2925,30 @@
                     });
 
                     this.trackNewSuccesses();
+
+                    // Update encrypted pipeline stats
+                    if (s.encrypted_queue) {
+                        console.log('[ENCRYPTED PIPELINE] Updating stats:', s.encrypted_queue);
+                        this.encryptedStats = {
+                            queueSize: s.encrypted_queue.queue_size || 0,
+                            activeUploads: s.encrypted_queue.active_uploads || 0,
+                            maxConcurrent: s.encrypted_queue.max_concurrent || 5,
+                            availableSlots: s.encrypted_queue.available_slots || 0,
+                            occupiedSlots: s.encrypted_queue.max_concurrent - s.encrypted_queue.available_slots || 0,
+                            waitingItems: s.encrypted_queue.queue_size || 0,
+                            totalSucceeded: s.encrypted_queue.total_succeeded || 0
+                        };
+                        console.log('[ENCRYPTED PIPELINE] Updated encryptedStats:', this.encryptedStats);
+                        console.log('[ENCRYPTED PIPELINE] Slot wagons:', this.encryptedSlotWagons);
+                        console.log('[ENCRYPTED PIPELINE] Waiting wagons:', this.encryptedWaitingWagons);
+
+                        const previousEncryptedProgress = this.encryptedUploadProgressData || [];
+                        this.encryptedUploadProgressData = s.encrypted_queue.upload_progress || [];
+
+                        this.trackEncryptedSuccesses();
+                    } else {
+                        console.warn('[ENCRYPTED PIPELINE] No encrypted_queue in stats response!');
+                    }
 
                     this.cleanupMemory();
                 },
