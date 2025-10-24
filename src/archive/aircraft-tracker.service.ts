@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { AircraftTrack } from './entities/aircraft-track.entity';
 import { SystemStats } from './entities/system-stats.entity';
 import { ArchiveService } from './archive.service';
@@ -53,6 +53,11 @@ export class AircraftTrackerService {
   private cachedFullStats: any = null;
   private lastFullStatsUpdate = 0;
   private readonly FULL_STATS_CACHE_MS = 500;
+
+  // Cached total tracks count to avoid expensive COUNT queries
+  private cachedTotalTracks = 0;
+  private lastTracksCountUpdate = 0;
+  private readonly TRACKS_COUNT_CACHE_MS = 5000; // Update every 5 seconds
 
   // UNENCRYPTED PIPELINE
   private uploadQueue: Array<{
@@ -870,7 +875,6 @@ export class AircraftTrackerService {
       const progress = this.uploadProgress.get(slotId);
       if (progress) {
         progress.progress = 20;
-        this.broadcastStatsUpdate();
       }
     }
 
@@ -880,7 +884,6 @@ export class AircraftTrackerService {
         const progress = this.uploadProgress.get(slotId);
         if (progress) {
           progress.progress = 40;
-          this.broadcastStatsUpdate();
         }
       }
 
@@ -890,18 +893,29 @@ export class AircraftTrackerService {
         const progress = this.uploadProgress.get(slotId);
         if (progress) {
           progress.progress = 70;
-          this.broadcastStatsUpdate();
         }
       }
 
       this.logger.log(`[BATCH] Uploaded ${batch.length} aircraft → ${txId}`);
 
+      // Bulk database operations - single query instead of N+1
+      const now = Date.now();
+      const hexList = batch.map(item => item.hex);
+
+      // Single bulk lookup for all aircraft in batch
+      const existingTracks = await this.aircraftTrackRepo.find({
+        where: { hex: In(hexList) }
+      });
+      const existingMap = new Map(existingTracks.map(track => [track.hex, track]));
+
+      const toUpdate: AircraftTrack[] = [];
+      const toInsert: any[] = [];
+
       for (const item of batch) {
-        const now = Date.now();
-        const existing = await this.aircraftTrackRepo.findOne({ where: { hex: item.hex } });
+        const existing = existingMap.get(item.hex);
 
         if (existing) {
-
+          // Update existing aircraft
           existing.last_seen = now;
           existing.last_uploaded = now;
           existing.last_tx_id = txId;
@@ -913,10 +927,10 @@ export class AircraftTrackerService {
             longitude: item.aircraft.lon,
             altitude_baro_ft: item.aircraft.alt_baro,
           };
-          await this.aircraftTrackRepo.save(existing);
+          toUpdate.push(existing);
         } else {
-
-          await this.aircraftTrackRepo.save({
+          // New aircraft - prepare for bulk insert
+          toInsert.push({
             hex: item.hex,
             callsign: item.aircraft.flight?.trim() || null,
             registration: item.aircraft.r || null,
@@ -937,11 +951,18 @@ export class AircraftTrackerService {
         }
       }
 
+      // Bulk save operations
+      if (toUpdate.length > 0) {
+        await this.aircraftTrackRepo.save(toUpdate);
+      }
+      if (toInsert.length > 0) {
+        await this.aircraftTrackRepo.insert(toInsert);
+      }
+
       if (slotId && this.uploadProgress.has(slotId)) {
         const progress = this.uploadProgress.get(slotId);
         if (progress) {
           progress.progress = 95;
-          this.broadcastStatsUpdate();
         }
       }
     } catch (error) {
@@ -962,7 +983,6 @@ export class AircraftTrackerService {
       const progress = this.encryptedUploadProgress.get(slotId);
       if (progress) {
         progress.progress = 20;
-        this.broadcastStatsUpdate();
       }
     }
 
@@ -972,7 +992,6 @@ export class AircraftTrackerService {
         const progress = this.encryptedUploadProgress.get(slotId);
         if (progress) {
           progress.progress = 40;
-          this.broadcastStatsUpdate();
         }
       }
 
@@ -990,18 +1009,29 @@ export class AircraftTrackerService {
         const progress = this.encryptedUploadProgress.get(slotId);
         if (progress) {
           progress.progress = 70;
-          this.broadcastStatsUpdate();
         }
       }
 
       this.logger.log(`🔒 [ENCRYPTED BATCH] Uploaded ${batch.length} aircraft → ${txId}`);
 
+      // Bulk database operations - single query instead of N+1
+      const now = Date.now();
+      const hexList = batch.map(item => item.hex);
+
+      // Single bulk lookup for all aircraft in batch
+      const existingTracks = await this.aircraftTrackRepo.find({
+        where: { hex: In(hexList) }
+      });
+      const existingMap = new Map(existingTracks.map(track => [track.hex, track]));
+
+      const toUpdate: AircraftTrack[] = [];
+      const toInsert: any[] = [];
+
       for (const item of batch) {
-        const now = Date.now();
-        const existing = await this.aircraftTrackRepo.findOne({ where: { hex: item.hex } });
+        const existing = existingMap.get(item.hex);
 
         if (existing) {
-
+          // Update existing aircraft
           existing.last_seen = now;
           existing.last_uploaded = now;
           existing.last_tx_id = txId;
@@ -1013,10 +1043,10 @@ export class AircraftTrackerService {
             longitude: item.aircraft.lon,
             altitude_baro_ft: item.aircraft.alt_baro,
           };
-          await this.aircraftTrackRepo.save(existing);
+          toUpdate.push(existing);
         } else {
-
-          await this.aircraftTrackRepo.save({
+          // New aircraft - prepare for bulk insert
+          toInsert.push({
             hex: item.hex,
             callsign: item.aircraft.flight?.trim() || null,
             registration: item.aircraft.r || null,
@@ -1037,11 +1067,18 @@ export class AircraftTrackerService {
         }
       }
 
+      // Bulk save operations
+      if (toUpdate.length > 0) {
+        await this.aircraftTrackRepo.save(toUpdate);
+      }
+      if (toInsert.length > 0) {
+        await this.aircraftTrackRepo.insert(toInsert);
+      }
+
       if (slotId && this.encryptedUploadProgress.has(slotId)) {
         const progress = this.encryptedUploadProgress.get(slotId);
         if (progress) {
           progress.progress = 95;
-          this.broadcastStatsUpdate();
         }
       }
     } catch (error) {
@@ -1051,11 +1088,18 @@ export class AircraftTrackerService {
   }
 
   async getStats() {
-    const totalTracks = await this.aircraftTrackRepo.count();
+    const now = Date.now();
+
+    // Only update count every 5 seconds to avoid expensive COUNT queries
+    if (now - this.lastTracksCountUpdate > this.TRACKS_COUNT_CACHE_MS) {
+      this.cachedTotalTracks = await this.aircraftTrackRepo.count();
+      this.lastTracksCountUpdate = now;
+    }
+
+    const totalTracks = this.cachedTotalTracks;
     const cachedAircraft = this.aircraftCache.size;
     const currentlyFlying = this.stats.currentlyFlying;
 
-    const now = Date.now();
     const uptimeSeconds = this.stats.systemStartTime > 0 ? Math.floor((now - this.stats.systemStartTime) / 1000) : 0;
     const successRate = this.stats.totalUploadsAttempted > 0
       ? ((this.stats.totalUploadsSucceeded / this.stats.totalUploadsAttempted) * 100).toFixed(2)

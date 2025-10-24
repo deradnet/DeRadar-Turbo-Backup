@@ -42,6 +42,29 @@ export class ArchiveService {
     });
   }
 
+  // Helper methods for data sanitization (moved to class level for JIT optimization)
+  private safeNumber(value: any): number | null {
+    if (value === null || value === undefined || value === 'ground') return null;
+    const num = Number(value);
+    return isNaN(num) ? null : num;
+  }
+
+  private safeString(value: any): string | null {
+    if (value === null || value === undefined || value === '') return null;
+    return String(value).trim() || null;
+  }
+
+  private safeBoolean(value: any): boolean | null {
+    if (value === null || value === undefined) return null;
+    return value === 1 || value === true;
+  }
+
+  private safeInt64(value: any): number | null {
+    if (value === null || value === undefined) return null;
+    const num = Number(value);
+    return isNaN(num) ? null : num;
+  }
+
   async uploadJson(json: any): Promise<string> {
     const tmpDir = os.tmpdir();
     const filePath = path.join(tmpDir, 'aircraft.json');
@@ -528,104 +551,84 @@ export class ArchiveService {
     const schema = this.createParquetSchema();
     const snapshotTimestamp = snapshotTime * 1000;
 
-    // Helper functions
-    const safeNumber = (value: any): number | null => {
-      if (value === null || value === undefined || value === 'ground') return null;
-      const num = Number(value);
-      return isNaN(num) ? null : num;
-    };
-
-    const safeString = (value: any): string | null => {
-      if (value === null || value === undefined || value === '') return null;
-      return String(value).trim() || null;
-    };
-
-    const safeBoolean = (value: any): boolean | null => {
-      if (value === null || value === undefined) return null;
-      return value === 1 || value === true;
-    };
-
-    const safeInt64 = (value: any): number | null => {
-      if (value === null || value === undefined) return null;
-      const num = Number(value);
-      return isNaN(num) ? null : num;
-    };
-
     try {
-      // Create Parquet writer
-      const writer = await parquet.ParquetWriter.openFile(schema, filePath, {
-        compression: 'SNAPPY',
-      });
-
-      // Write each aircraft as a row
+      // Precompute all rows first (separates transformation from I/O)
+      const rows: any[] = [];
       for (const aircraft of aircraftList) {
         // Skip aircraft without hex (should never happen, but safety check)
         if (!aircraft.hex) {
           continue;
         }
 
-        try {
-          const row = {
-            snapshot_timestamp: snapshotTimestamp,
-            snapshot_total_messages: aircraftList.length,
-            icao_address: aircraft.hex,
-            callsign: safeString(aircraft.flight),
-            registration: safeString(aircraft.r),
-            aircraft_type: safeString(aircraft.t),
-            type_description: safeString(aircraft.desc),
-            emitter_category: safeString(aircraft.category),
-            latitude: safeNumber(aircraft.lat),
-            longitude: safeNumber(aircraft.lon),
-            position_source: safeString(aircraft.type),
-            altitude_baro_ft: safeNumber(aircraft.alt_baro),
-            altitude_geom_ft: safeNumber(aircraft.alt_geom),
-            vertical_rate_baro_fpm: safeNumber(aircraft.baro_rate),
-            vertical_rate_geom_fpm: safeNumber(aircraft.geom_rate),
-            ground_speed_kts: safeNumber(aircraft.gs),
-            indicated_airspeed_kts: safeNumber(aircraft.ias),
-            true_airspeed_kts: safeNumber(aircraft.tas),
-            mach_number: safeNumber(aircraft.mach),
-            track_degrees: safeNumber(aircraft.track),
-            track_rate_deg_sec: safeNumber(aircraft.track_rate),
-            magnetic_heading_degrees: safeNumber(aircraft.mag_heading),
-            true_heading_degrees: safeNumber(aircraft.true_heading),
-            roll_degrees: safeNumber(aircraft.roll),
-            wind_direction_degrees: safeNumber(aircraft.wd),
-            wind_speed_kts: safeNumber(aircraft.ws),
-            outside_air_temp_c: safeNumber(aircraft.oat),
-            total_air_temp_c: safeNumber(aircraft.tat),
-            nav_qnh_mb: safeNumber(aircraft.nav_qnh),
-            nav_altitude_mcp_ft: safeNumber(aircraft.nav_altitude_mcp),
-            nav_altitude_fms_ft: safeNumber(aircraft.nav_altitude_fms),
-            nav_heading_degrees: safeNumber(aircraft.nav_heading),
-            squawk_code: safeString(aircraft.squawk),
-            emergency_status: safeString(aircraft.emergency),
-            spi_flag: safeBoolean(aircraft.spi),
-            alert_flag: safeBoolean(aircraft.alert),
-            adsb_version: safeNumber(aircraft.version),
-            navigation_integrity_category: safeNumber(aircraft.nic),
-            navigation_accuracy_position: safeNumber(aircraft.nac_p),
-            navigation_accuracy_velocity: safeNumber(aircraft.nac_v),
-            source_integrity_level: safeNumber(aircraft.sil),
-            source_integrity_level_type: safeString(aircraft.sil_type),
-            geometric_vertical_accuracy: safeNumber(aircraft.gva),
-            system_design_assurance: safeNumber(aircraft.sda),
-            nic_baro: safeNumber(aircraft.nic_baro),
-            radius_of_containment: safeNumber(aircraft.rc),
-            messages_received: safeInt64(aircraft.messages),
-            last_seen_seconds: safeNumber(aircraft.seen),
-            last_position_seen_seconds: safeNumber(aircraft.seen_pos),
-            rssi_dbm: safeNumber(aircraft.rssi),
-            distance_from_receiver_nm: safeNumber(aircraft.dst),
-            bearing_from_receiver_degrees: safeNumber(aircraft.dir),
-            database_flags: safeNumber(aircraft.dbFlags),
-          };
+        rows.push({
+          snapshot_timestamp: snapshotTimestamp,
+          snapshot_total_messages: aircraftList.length,
+          icao_address: aircraft.hex,
+          callsign: this.safeString(aircraft.flight),
+          registration: this.safeString(aircraft.r),
+          aircraft_type: this.safeString(aircraft.t),
+          type_description: this.safeString(aircraft.desc),
+          emitter_category: this.safeString(aircraft.category),
+          latitude: this.safeNumber(aircraft.lat),
+          longitude: this.safeNumber(aircraft.lon),
+          position_source: this.safeString(aircraft.type),
+          altitude_baro_ft: this.safeNumber(aircraft.alt_baro),
+          altitude_geom_ft: this.safeNumber(aircraft.alt_geom),
+          vertical_rate_baro_fpm: this.safeNumber(aircraft.baro_rate),
+          vertical_rate_geom_fpm: this.safeNumber(aircraft.geom_rate),
+          ground_speed_kts: this.safeNumber(aircraft.gs),
+          indicated_airspeed_kts: this.safeNumber(aircraft.ias),
+          true_airspeed_kts: this.safeNumber(aircraft.tas),
+          mach_number: this.safeNumber(aircraft.mach),
+          track_degrees: this.safeNumber(aircraft.track),
+          track_rate_deg_sec: this.safeNumber(aircraft.track_rate),
+          magnetic_heading_degrees: this.safeNumber(aircraft.mag_heading),
+          true_heading_degrees: this.safeNumber(aircraft.true_heading),
+          roll_degrees: this.safeNumber(aircraft.roll),
+          wind_direction_degrees: this.safeNumber(aircraft.wd),
+          wind_speed_kts: this.safeNumber(aircraft.ws),
+          outside_air_temp_c: this.safeNumber(aircraft.oat),
+          total_air_temp_c: this.safeNumber(aircraft.tat),
+          nav_qnh_mb: this.safeNumber(aircraft.nav_qnh),
+          nav_altitude_mcp_ft: this.safeNumber(aircraft.nav_altitude_mcp),
+          nav_altitude_fms_ft: this.safeNumber(aircraft.nav_altitude_fms),
+          nav_heading_degrees: this.safeNumber(aircraft.nav_heading),
+          squawk_code: this.safeString(aircraft.squawk),
+          emergency_status: this.safeString(aircraft.emergency),
+          spi_flag: this.safeBoolean(aircraft.spi),
+          alert_flag: this.safeBoolean(aircraft.alert),
+          adsb_version: this.safeNumber(aircraft.version),
+          navigation_integrity_category: this.safeNumber(aircraft.nic),
+          navigation_accuracy_position: this.safeNumber(aircraft.nac_p),
+          navigation_accuracy_velocity: this.safeNumber(aircraft.nac_v),
+          source_integrity_level: this.safeNumber(aircraft.sil),
+          source_integrity_level_type: this.safeString(aircraft.sil_type),
+          geometric_vertical_accuracy: this.safeNumber(aircraft.gva),
+          system_design_assurance: this.safeNumber(aircraft.sda),
+          nic_baro: this.safeNumber(aircraft.nic_baro),
+          radius_of_containment: this.safeNumber(aircraft.rc),
+          messages_received: this.safeInt64(aircraft.messages),
+          last_seen_seconds: this.safeNumber(aircraft.seen),
+          last_position_seen_seconds: this.safeNumber(aircraft.seen_pos),
+          rssi_dbm: this.safeNumber(aircraft.rssi),
+          distance_from_receiver_nm: this.safeNumber(aircraft.dst),
+          bearing_from_receiver_degrees: this.safeNumber(aircraft.dir),
+          database_flags: this.safeNumber(aircraft.dbFlags),
+        });
+      }
 
+      // Create Parquet writer and write all precomputed rows
+      const writer = await parquet.ParquetWriter.openFile(schema, filePath, {
+        compression: 'SNAPPY',
+      });
+
+      for (const row of rows) {
+        try {
           await writer.appendRow(row);
         } catch (rowError) {
-          // Log problematic aircraft data for debugging
-          console.error(`Failed to write row for aircraft ${aircraft.hex}:`, rowError.message);
-          console.error('Aircraft data:', JSON.stringify(aircraft, null, 2));
+          // Log problematic row data for debugging
+          console.error(`Failed to write row for aircraft ${row.icao_address}:`, rowError.message);
+          console.error('Row data:', JSON.stringify(row, null, 2));
           throw rowError;
         }
       }
@@ -637,10 +640,6 @@ export class ArchiveService {
 
       // Log file details for debugging
       console.log(`Created Parquet file: ${filePath}, Size: ${fileSizeKB}KB, Rows: ${aircraftList.length}`);
-
-      // Collect all aircraft ICAOs and callsigns for tags
-      const icaoList = aircraftList.map(a => a.hex).filter(Boolean);
-      const callsignList = aircraftList.map(a => safeString(a.flight)).filter(Boolean);
 
       const utcTimestamp = new Date()
         .toISOString()
@@ -670,11 +669,20 @@ export class ArchiveService {
         { name: 'Encrypted', value: 'false' },
       ];
 
-      // Add individual ICAO tags for each aircraft (max 75 aircraft = ~1500 bytes)
-      const icaoTags = icaoList.map(icao => ({ name: 'ICAO', value: sanitizeTagValue(icao || '') }));
-
-      // Add individual Callsign tags for each aircraft with callsign (max 75 = ~1800 bytes)
-      const callsignTags = callsignList.map(callsign => ({ name: 'Callsign', value: sanitizeTagValue(callsign || '') }));
+      // Single-pass tag creation - build ICAO and Callsign tags in one loop
+      const icaoTags: Array<{ name: string; value: string }> = [];
+      const callsignTags: Array<{ name: string; value: string }> = [];
+      const icaoList: string[] = [];
+      for (const aircraft of aircraftList) {
+        if (aircraft.hex) {
+          icaoTags.push({ name: 'ICAO', value: sanitizeTagValue(aircraft.hex) });
+          icaoList.push(aircraft.hex);
+        }
+        const callsign = this.safeString(aircraft.flight);
+        if (callsign) {
+          callsignTags.push({ name: 'Callsign', value: sanitizeTagValue(callsign) });
+        }
+      }
 
       // Combine all tags (base ~300 bytes + icao ~1500 + callsign ~1800 = ~3600 bytes, well under 4096 limit)
       const allTags = [...baseTags, ...icaoTags, ...callsignTags];
@@ -757,94 +765,75 @@ export class ArchiveService {
     const schema = this.createParquetSchema();
     const snapshotTimestamp = snapshotTime * 1000;
 
-    // Helper functions (same as unencrypted version)
-    const safeNumber = (value: any): number | null => {
-      if (value === null || value === undefined || value === 'ground') return null;
-      const num = Number(value);
-      return isNaN(num) ? null : num;
-    };
-
-    const safeString = (value: any): string | null => {
-      if (value === null || value === undefined || value === '') return null;
-      return String(value).trim() || null;
-    };
-
-    const safeBoolean = (value: any): boolean | null => {
-      if (value === null || value === undefined) return null;
-      return value === 1 || value === true;
-    };
-
-    const safeInt64 = (value: any): number | null => {
-      if (value === null || value === undefined) return null;
-      const num = Number(value);
-      return isNaN(num) ? null : num;
-    };
-
     try {
-      // Create Parquet file (same as unencrypted)
+      // Precompute all rows first (separates transformation from I/O)
+      const rows: any[] = [];
+      for (const aircraft of aircraftList) {
+        if (!aircraft.hex) continue;
+
+        rows.push({
+          snapshot_timestamp: snapshotTimestamp,
+          snapshot_total_messages: aircraftList.length,
+          icao_address: aircraft.hex,
+          callsign: this.safeString(aircraft.flight),
+          registration: this.safeString(aircraft.r),
+          aircraft_type: this.safeString(aircraft.t),
+          type_description: this.safeString(aircraft.desc),
+          emitter_category: this.safeString(aircraft.category),
+          latitude: this.safeNumber(aircraft.lat),
+          longitude: this.safeNumber(aircraft.lon),
+          position_source: this.safeString(aircraft.type),
+          altitude_baro_ft: this.safeNumber(aircraft.alt_baro),
+          altitude_geom_ft: this.safeNumber(aircraft.alt_geom),
+          vertical_rate_baro_fpm: this.safeNumber(aircraft.baro_rate),
+          vertical_rate_geom_fpm: this.safeNumber(aircraft.geom_rate),
+          ground_speed_kts: this.safeNumber(aircraft.gs),
+          indicated_airspeed_kts: this.safeNumber(aircraft.ias),
+          true_airspeed_kts: this.safeNumber(aircraft.tas),
+          mach_number: this.safeNumber(aircraft.mach),
+          track_degrees: this.safeNumber(aircraft.track),
+          track_rate_deg_sec: this.safeNumber(aircraft.track_rate),
+          magnetic_heading_degrees: this.safeNumber(aircraft.mag_heading),
+          true_heading_degrees: this.safeNumber(aircraft.true_heading),
+          roll_degrees: this.safeNumber(aircraft.roll),
+          wind_direction_degrees: this.safeNumber(aircraft.wd),
+          wind_speed_kts: this.safeNumber(aircraft.ws),
+          outside_air_temp_c: this.safeNumber(aircraft.oat),
+          total_air_temp_c: this.safeNumber(aircraft.tat),
+          nav_qnh_mb: this.safeNumber(aircraft.nav_qnh),
+          nav_altitude_mcp_ft: this.safeNumber(aircraft.nav_altitude_mcp),
+          nav_altitude_fms_ft: this.safeNumber(aircraft.nav_altitude_fms),
+          nav_heading_degrees: this.safeNumber(aircraft.nav_heading),
+          squawk_code: this.safeString(aircraft.squawk),
+          emergency_status: this.safeString(aircraft.emergency),
+          spi_flag: this.safeBoolean(aircraft.spi),
+          alert_flag: this.safeBoolean(aircraft.alert),
+          adsb_version: this.safeNumber(aircraft.version),
+          navigation_integrity_category: this.safeNumber(aircraft.nic),
+          navigation_accuracy_position: this.safeNumber(aircraft.nac_p),
+          navigation_accuracy_velocity: this.safeNumber(aircraft.nac_v),
+          source_integrity_level: this.safeNumber(aircraft.sil),
+          source_integrity_level_type: this.safeString(aircraft.sil_type),
+          geometric_vertical_accuracy: this.safeNumber(aircraft.gva),
+          system_design_assurance: this.safeNumber(aircraft.sda),
+          nic_baro: this.safeNumber(aircraft.nic_baro),
+          radius_of_containment: this.safeNumber(aircraft.rc),
+          messages_received: this.safeInt64(aircraft.messages),
+          last_seen_seconds: this.safeNumber(aircraft.seen),
+          last_position_seen_seconds: this.safeNumber(aircraft.seen_pos),
+          rssi_dbm: this.safeNumber(aircraft.rssi),
+          distance_from_receiver_nm: this.safeNumber(aircraft.dst),
+          bearing_from_receiver_degrees: this.safeNumber(aircraft.dir),
+          database_flags: this.safeNumber(aircraft.dbFlags),
+        });
+      }
+
+      // Create Parquet writer and write all precomputed rows
       const writer = await parquet.ParquetWriter.openFile(schema, filePath, {
         compression: 'SNAPPY',
       });
 
-      for (const aircraft of aircraftList) {
-        if (!aircraft.hex) continue;
-
-        const row = {
-          snapshot_timestamp: snapshotTimestamp,
-          snapshot_total_messages: aircraftList.length,
-          icao_address: aircraft.hex,
-          callsign: safeString(aircraft.flight),
-          registration: safeString(aircraft.r),
-          aircraft_type: safeString(aircraft.t),
-          type_description: safeString(aircraft.desc),
-          emitter_category: safeString(aircraft.category),
-          latitude: safeNumber(aircraft.lat),
-          longitude: safeNumber(aircraft.lon),
-          position_source: safeString(aircraft.type),
-          altitude_baro_ft: safeNumber(aircraft.alt_baro),
-          altitude_geom_ft: safeNumber(aircraft.alt_geom),
-          vertical_rate_baro_fpm: safeNumber(aircraft.baro_rate),
-          vertical_rate_geom_fpm: safeNumber(aircraft.geom_rate),
-          ground_speed_kts: safeNumber(aircraft.gs),
-          indicated_airspeed_kts: safeNumber(aircraft.ias),
-          true_airspeed_kts: safeNumber(aircraft.tas),
-          mach_number: safeNumber(aircraft.mach),
-          track_degrees: safeNumber(aircraft.track),
-          track_rate_deg_sec: safeNumber(aircraft.track_rate),
-          magnetic_heading_degrees: safeNumber(aircraft.mag_heading),
-          true_heading_degrees: safeNumber(aircraft.true_heading),
-          roll_degrees: safeNumber(aircraft.roll),
-          wind_direction_degrees: safeNumber(aircraft.wd),
-          wind_speed_kts: safeNumber(aircraft.ws),
-          outside_air_temp_c: safeNumber(aircraft.oat),
-          total_air_temp_c: safeNumber(aircraft.tat),
-          nav_qnh_mb: safeNumber(aircraft.nav_qnh),
-          nav_altitude_mcp_ft: safeNumber(aircraft.nav_altitude_mcp),
-          nav_altitude_fms_ft: safeNumber(aircraft.nav_altitude_fms),
-          nav_heading_degrees: safeNumber(aircraft.nav_heading),
-          squawk_code: safeString(aircraft.squawk),
-          emergency_status: safeString(aircraft.emergency),
-          spi_flag: safeBoolean(aircraft.spi),
-          alert_flag: safeBoolean(aircraft.alert),
-          adsb_version: safeNumber(aircraft.version),
-          navigation_integrity_category: safeNumber(aircraft.nic),
-          navigation_accuracy_position: safeNumber(aircraft.nac_p),
-          navigation_accuracy_velocity: safeNumber(aircraft.nac_v),
-          source_integrity_level: safeNumber(aircraft.sil),
-          source_integrity_level_type: safeString(aircraft.sil_type),
-          geometric_vertical_accuracy: safeNumber(aircraft.gva),
-          system_design_assurance: safeNumber(aircraft.sda),
-          nic_baro: safeNumber(aircraft.nic_baro),
-          radius_of_containment: safeNumber(aircraft.rc),
-          messages_received: safeInt64(aircraft.messages),
-          last_seen_seconds: safeNumber(aircraft.seen),
-          last_position_seen_seconds: safeNumber(aircraft.seen_pos),
-          rssi_dbm: safeNumber(aircraft.rssi),
-          distance_from_receiver_nm: safeNumber(aircraft.dst),
-          bearing_from_receiver_degrees: safeNumber(aircraft.dir),
-          database_flags: safeNumber(aircraft.dbFlags),
-        };
-
+      for (const row of rows) {
         await writer.appendRow(row);
       }
 
@@ -871,8 +860,6 @@ export class ArchiveService {
       const encryptedFileSize = fs.statSync(encryptionResult.encryptedFilePath).size;
       const encryptedFileSizeKB = (encryptedFileSize / 1024).toFixed(2);
 
-      const icaoList = aircraftList.map(a => a.hex).filter(Boolean);
-      const callsignList = aircraftList.map(a => a.flight).filter(Boolean);
       const utcTimestamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
 
       // Helper function to sanitize tag values
@@ -900,11 +887,20 @@ export class ArchiveService {
         { name: 'Batch-Timestamp', value: String(snapshotTime) },
       ];
 
-      // Add individual ICAO tags for each aircraft
-      const icaoTags = icaoList.map(icao => ({ name: 'ICAO', value: sanitizeTagValue(icao || '') }));
-
-      // Add individual Callsign tags for each aircraft with callsign
-      const callsignTags = callsignList.map(callsign => ({ name: 'Callsign', value: sanitizeTagValue(callsign || '') }));
+      // Single-pass tag creation - build ICAO and Callsign tags in one loop
+      const icaoTags: Array<{ name: string; value: string }> = [];
+      const callsignTags: Array<{ name: string; value: string }> = [];
+      const icaoList: string[] = [];
+      for (const aircraft of aircraftList) {
+        if (aircraft.hex) {
+          icaoTags.push({ name: 'ICAO', value: sanitizeTagValue(aircraft.hex) });
+          icaoList.push(aircraft.hex);
+        }
+        const callsign = this.safeString(aircraft.flight);
+        if (callsign) {
+          callsignTags.push({ name: 'Callsign', value: sanitizeTagValue(callsign) });
+        }
+      }
 
       // Combine all tags
       const allTags = [...baseTags, ...icaoTags, ...callsignTags];
