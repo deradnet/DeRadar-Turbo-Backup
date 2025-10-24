@@ -3,6 +3,18 @@
 All notable changes to DeRadar Turbo Backup Engine will be documented in this file.
 
 
+## [2.2.0](https://github.com///compare/v2.1.0...v2.2.0) (2025-10-24)
+
+
+### Features
+
+* integrate Nillion nilDB keystore service for encrypted package key management ([645165b](https://github.com///commit/645165b89f833cd6d0528598d3fc954354ebab67))
+
+
+### Documentation
+
+* **changelog:** enhance v2.1.0 release notes with comprehensive feature list ([dac0bb8](https://github.com///commit/dac0bb85063c7a82b68d03746aefac3693d9e609))
+
 ## [2.1.0](https://github.com///compare/v2.0.0...v2.1.0) (2025-10-23)
 
 ### Features
