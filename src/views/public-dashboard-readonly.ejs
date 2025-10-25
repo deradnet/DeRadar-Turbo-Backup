@@ -1438,12 +1438,12 @@
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 mobile-stack">
                         <div class="relative overflow-hidden bg-dark-bg/50 p-4 rounded-lg text-center border border-queue-primary/20 hover:border-queue-primary/40 transition-all group cursor-pointer" style="transform: rotate(-0.5deg);">
-                            <!-- Background TPS Graph -->
+                            <!-- Background TPM Graph -->
                             <div class="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
                                 <svg width="100%" height="100%" viewBox="0 0 200 120" preserveAspectRatio="none" class="transform scale-150">
-                                    <path :d="tpsSparkline" fill="none" stroke="url(#tpsGradientPublicBg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path :d="tpmSparkline" fill="none" stroke="url(#tpmGradientPublicBg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
                                     <defs>
-                                        <linearGradient id="tpsGradientPublicBg" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <linearGradient id="tpmGradientPublicBg" x1="0%" y1="0%" x2="100%" y2="0%">
                                             <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
                                             <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:1" />
                                         </linearGradient>
@@ -1455,11 +1455,11 @@
                             <div class="relative z-10">
                                 <div class="flex items-center justify-center text-gray-400 text-xs uppercase tracking-wider mb-2">
                                     <i class="icon-trending-up mr-1.5 text-queue-accent group-hover:scale-110 transition-transform"></i>
-                                    TPS
+                                    TPM
                                 </div>
-                                <div class="text-4xl font-bold bg-gradient-to-r from-queue-primary to-queue-accent bg-clip-text text-transparent" x-text="animatedStats.tps >= 1 ? Math.round(animatedStats.tps) : animatedStats.tps.toFixed(2)">0</div>
+                                <div class="text-4xl font-bold bg-gradient-to-r from-queue-primary to-queue-accent bg-clip-text text-transparent" x-text="animatedStats.tpm >= 1 ? Math.round(animatedStats.tpm) : animatedStats.tpm.toFixed(2)">0</div>
                                 <div class="text-xs text-gray-500 mt-1">
-                                    Recorded Peak TPS: <span x-text="stats.peakTps >= 1 ? Math.round(stats.peakTps) : stats.peakTps.toFixed(2)">0.00</span>
+                                    Recorded Peak TPM: <span x-text="stats.peakTpm >= 1 ? Math.round(stats.peakTpm) : stats.peakTpm.toFixed(2)">0.00</span>
                                 </div>
                             </div>
                         </div>
@@ -2148,8 +2148,8 @@
                     totalSucceeded: 0,
                     keysInNilDB: 0,
                     totalFailed: 0,
-                    tps: 0,
-                    peakTps: 0,
+                    tpm: 0,
+                    peakTpm: 0,
                     totalNew: 0,
                     totalUpdates: 0,
                     totalReappeared: 0,
@@ -2204,7 +2204,7 @@
                     queueSize: 0,
                     activeUploads: 0,
                     waitingItems: 0,
-                    tps: 0,
+                    tpm: 0,
                     pollsPerMin: 0,
                     successRate: 0
                 },
@@ -2213,7 +2213,7 @@
 
                 lastRateUpdate: 0,
                 rateUpdateInterval: 3000,
-                tpsHistory: new Array(30).fill(0), // Last 30 TPS data points for graph (from backend) 
+                tpmHistory: new Array(30).fill(0), // Last 30 TPM data points for graph (from backend) 
                 navigation: [
                     { id: 'dashboard', name: 'Queue Control', icon: 'icon-layout-dashboard' },
                     { id: 'archive', name: 'Data Archive', icon: 'icon-database' },
@@ -2224,26 +2224,26 @@
                     const page = this.navigation.find(item => item.id === this.currentPage);
                     return page ? page.name : 'Dashboard';
                 },
-                get tpsSparkline() {
-                    if (this.tpsHistory.length < 2) return '';
+                get tpmSparkline() {
+                    if (this.tpmHistory.length < 2) return '';
 
                     const width = 200;
                     const height = 120;
                     const padding = 10;
                     const graphHeight = height - (padding * 2);
 
-                    // Adaptive scaling: shows detail during normal operation (4-8 TPS)
-                    // but accommodates spikes (up to 60 TPS)
-                    const currentMax = Math.max(...this.tpsHistory);
+                    // Adaptive scaling: shows detail during normal operation (240-480 TPM)
+                    // but accommodates spikes (up to 3600 TPM)
+                    const currentMax = Math.max(...this.tpmHistory);
 
-                    // Comfortable scale: 2x current max, minimum 15 for detail
-                    const comfortableMax = Math.max(currentMax * 2, 15);
+                    // Comfortable scale: 2x current max, minimum 900 for detail
+                    const comfortableMax = Math.max(currentMax * 2, 900);
 
-                    // Honor peak TPS if higher than comfortable scale
-                    const effectiveMax = Math.max(comfortableMax, this.stats.peakTps || 0);
+                    // Honor peak TPM if higher than comfortable scale
+                    const effectiveMax = Math.max(comfortableMax, this.stats.peakTpm || 0);
 
-                    const points = this.tpsHistory.map((value, index) => {
-                        const x = padding + (index / (this.tpsHistory.length - 1)) * (width - padding * 2);
+                    const points = this.tpmHistory.map((value, index) => {
+                        const x = padding + (index / (this.tpmHistory.length - 1)) * (width - padding * 2);
                         // Scale from 0 (bottom) to effectiveMax (top)
                         const normalized = value / effectiveMax;
                         // Invert Y-axis (SVG coordinate system: 0 is top, height is bottom)
@@ -2938,8 +2938,8 @@
                         totalAttempts: s.uploads.total_attempted || 0,
                         totalSucceeded: s.uploads.total_succeeded || 0,
                         totalFailed: s.uploads.total_failed || 0,
-                        tps: s.performance.tps || 0,
-                        peakTps: s.performance.peak_tps || 0,
+                        tpm: s.performance.tpm || 0,
+                        peakTpm: s.performance.peak_tpm || 0,
                         totalNew: s.aircraft.total_new || 0,
                         totalUpdates: s.aircraft.total_updates || 0,
                         totalReappeared: s.aircraft.total_reappeared || 0,
@@ -2969,14 +2969,14 @@
 
                     const now = Date.now();
                     if (isInitialLoad || (now - this.lastRateUpdate) >= this.rateUpdateInterval) {
-                        this.animateNumber('tps', parseFloat(this.stats.tps) || 0, true, isInitialLoad);
+                        this.animateNumber('tpm', parseFloat(this.stats.tpm) || 0, true, isInitialLoad);
                         this.animateNumber('pollsPerMin', parseFloat(this.stats.pollsPerMin) || 0, true, isInitialLoad);
                         this.animateNumber('successRate', this.stats.successRate || 0, true, isInitialLoad);
                         this.lastRateUpdate = now;
 
-                        // Update TPS history from backend
-                        if (s.performance.tps_history) {
-                            this.tpsHistory = s.performance.tps_history;
+                        // Update TPM history from backend
+                        if (s.performance.tpm_history) {
+                            this.tpmHistory = s.performance.tpm_history;
                         }
                     }
 

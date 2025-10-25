@@ -104,7 +104,7 @@ export class AircraftTrackerService {
     lastPollTime: 0,
     totalPollCycles: 0,
     currentlyFlying: 0,
-    peakTps: 0,
+    peakTpm: 0,
   };
 
   private encryptedStats = {
@@ -122,18 +122,18 @@ export class AircraftTrackerService {
     sessionStartTime: 0,
   };
 
-  // 60-second sliding window with buckets for TPS calculation
+  // 60-second sliding window with buckets for TPM calculation
   // 12 buckets × 5 seconds = 60 seconds total
-  private tpsBuckets: number[] = new Array(12).fill(0);
+  private tpmBuckets: number[] = new Array(12).fill(0);
   private currentBucketIndex: number = 0;
   private lastBucketUpdate: number = 0;
   private readonly BUCKET_SIZE_MS = 5000; // 5 seconds per bucket
   private readonly TOTAL_BUCKETS = 12; // 12 buckets = 60 seconds
 
-  // TPS history for UI graph (last 30 data points, updated every 3 seconds)
-  private tpsHistory: number[] = new Array(30).fill(0);
-  private lastTpsHistoryUpdate: number = 0;
-  private readonly TPS_HISTORY_INTERVAL_MS = 3000; // 3 seconds
+  // TPM history for UI graph (last 30 data points, updated every 3 seconds)
+  private tpmHistory: number[] = new Array(30).fill(0);
+  private lastTpmHistoryUpdate: number = 0;
+  private readonly TPM_HISTORY_INTERVAL_MS = 3000; // 3 seconds
 
   private currentStatsId: number | null = null;
 
@@ -202,7 +202,7 @@ export class AircraftTrackerService {
         lastPollTime: currentTime,
         totalPollCycles: existingStats.total_poll_cycles,
         currentlyFlying: 0,
-        peakTps: parseFloat(existingStats.peak_tps?.toString() || '0'),
+        peakTpm: parseFloat(existingStats.peak_tpm?.toString() || '0'),
       };
 
       this.encryptedStats = {
@@ -288,7 +288,7 @@ export class AircraftTrackerService {
         total_updates: this.stats.totalUpdates,
         total_reappeared: this.stats.totalReappeared,
         total_poll_cycles: this.stats.totalPollCycles,
-        peak_tps: this.stats.peakTps,
+        peak_tpm: this.stats.peakTpm,
       });
     } catch (error) {
       this.logger.error(`Failed to persist stats: ${error.message}`);
@@ -296,16 +296,16 @@ export class AircraftTrackerService {
   }
 
   /**
-   * Update TPS buckets
+   * Update TPM buckets
    * Called on each successful upload
    */
-  private updateTpsEMA() {
+  private updateTpmEMA() {
     const now = Date.now();
 
     // Initialize on first upload
     if (this.lastBucketUpdate === 0) {
       this.lastBucketUpdate = now;
-      this.tpsBuckets[this.currentBucketIndex] = 1;
+      this.tpmBuckets[this.currentBucketIndex] = 1;
       return;
     }
 
@@ -322,39 +322,39 @@ export class AircraftTrackerService {
       // Rotate and clear old buckets
       for (let i = 0; i < bucketsToRotate; i++) {
         this.currentBucketIndex = (this.currentBucketIndex + 1) % this.TOTAL_BUCKETS;
-        this.tpsBuckets[this.currentBucketIndex] = 0;
+        this.tpmBuckets[this.currentBucketIndex] = 0;
       }
 
       this.lastBucketUpdate = now;
     }
 
     // Increment current bucket
-    this.tpsBuckets[this.currentBucketIndex]++;
+    this.tpmBuckets[this.currentBucketIndex]++;
   }
 
   /**
-   * Get current TPS from buckets (60-second sliding window)
+   * Get current TPM from buckets (60-second sliding window)
    */
-  private getCurrentTps(): number {
+  private getCurrentTpm(): number {
     if (this.lastBucketUpdate === 0) {
       return 0;
     }
 
-    // Sum all buckets
-    const totalUploads = this.tpsBuckets.reduce((sum, count) => sum + count, 0);
+    // Sum all buckets - this gives us transactions in the last 60 seconds
+    const totalUploads = this.tpmBuckets.reduce((sum, count) => sum + count, 0);
 
-    // Divide by 60 seconds to get TPS
-    const currentTps = totalUploads / 60;
+    // Total uploads in 60 seconds = TPM (Transactions Per Minute)
+    const currentTpm = totalUploads;
 
-    // Update TPS history every 3 seconds for UI graph
+    // Update TPM history every 3 seconds for UI graph
     const now = Date.now();
-    if (now - this.lastTpsHistoryUpdate >= this.TPS_HISTORY_INTERVAL_MS) {
-      this.tpsHistory.shift(); // Remove oldest
-      this.tpsHistory.push(currentTps); // Add newest
-      this.lastTpsHistoryUpdate = now;
+    if (now - this.lastTpmHistoryUpdate >= this.TPM_HISTORY_INTERVAL_MS) {
+      this.tpmHistory.shift(); // Remove oldest
+      this.tpmHistory.push(currentTpm); // Add newest
+      this.lastTpmHistoryUpdate = now;
     }
 
-    return currentTps;
+    return currentTpm;
   }
 
   stopTracking() {
@@ -910,8 +910,8 @@ export class AircraftTrackerService {
         this.sessionStats.uploadsSucceeded++;
       }
 
-      // Update TPS EMA
-      this.updateTpsEMA();
+      // Update TPM EMA
+      this.updateTpmEMA();
 
       if (slotId && progressMap.has(slotId)) {
         const progress = progressMap.get(slotId);
@@ -1050,11 +1050,11 @@ export class AircraftTrackerService {
       }
 
       // Bulk save operations
-      if (toUpdate.length > 0) {
-        await this.aircraftTrackRepo.save(toUpdate);
-      }
-      if (toInsert.length > 0) {
-        await this.aircraftTrackRepo.insert(toInsert);
+      // CRITICAL: Use save() for both update and insert to avoid UNIQUE constraint violations
+      // in parallel processing. save() automatically handles UPSERT.
+      const allTracks = [...toUpdate, ...toInsert];
+      if (allTracks.length > 0) {
+        await this.aircraftTrackRepo.save(allTracks);
       }
 
       if (slotId && this.uploadProgress.has(slotId)) {
@@ -1166,11 +1166,11 @@ export class AircraftTrackerService {
       }
 
       // Bulk save operations
-      if (toUpdate.length > 0) {
-        await this.aircraftTrackRepo.save(toUpdate);
-      }
-      if (toInsert.length > 0) {
-        await this.aircraftTrackRepo.insert(toInsert);
+      // CRITICAL: Use save() for both update and insert to avoid UNIQUE constraint violations
+      // in parallel processing. save() automatically handles UPSERT.
+      const allTracks = [...toUpdate, ...toInsert];
+      if (allTracks.length > 0) {
+        await this.aircraftTrackRepo.save(allTracks);
       }
 
       if (slotId && this.encryptedUploadProgress.has(slotId)) {
@@ -1269,26 +1269,26 @@ export class AircraftTrackerService {
       },
 
       performance: {
-        tps: (() => {
-          // Get current TPS from EMA
-          const currentTps = this.getCurrentTps();
+        tpm: (() => {
+          // Get current TPM from EMA
+          const currentTpm = this.getCurrentTpm();
 
-          // Track peak TPS
-          if (currentTps > this.stats.peakTps) {
-            this.stats.peakTps = currentTps;
+          // Track peak TPM
+          if (currentTpm > this.stats.peakTpm) {
+            this.stats.peakTpm = currentTpm;
             this.scheduleStatsPersist();
           }
 
           // Show rounded number if >= 1, otherwise show 2 decimals
-          return currentTps >= 1 ? Math.round(currentTps).toString() : currentTps.toFixed(2);
+          return currentTpm >= 1 ? Math.round(currentTpm).toString() : currentTpm.toFixed(2);
         })(),
 
-        peak_tps: (() => {
-          const peak = this.stats.peakTps;
+        peak_tpm: (() => {
+          const peak = this.stats.peakTpm;
           return peak >= 1 ? Math.round(peak).toString() : peak.toFixed(2);
         })(),
 
-        tps_history: this.tpsHistory, // Last 30 TPS values for graph
+        tpm_history: this.tpmHistory, // Last 30 TPM values for graph
 
         polls_per_minute: (() => {
           if (this.sessionStats.pollCycles === 0) return '0.00';

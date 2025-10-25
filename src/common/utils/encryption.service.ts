@@ -76,18 +76,15 @@ export class EncryptionService {
   }
 
   /**
-   * Encrypts a file with UUID-derived key
-   * Returns path to encrypted file and metadata
+   * OPTIMIZED: Encrypts a Buffer with UUID-derived key (in-memory)
+   * Returns encrypted buffer and metadata (no disk I/O)
    */
-  encryptFile(inputFilePath: string, packageUuid: string): {
-    encryptedFilePath: string;
+  encryptBuffer(plaintextData: Buffer, packageUuid: string): {
+    encryptedBuffer: Buffer;
     dataHash: string;
     fileSize: number;
     encryptionKey: Buffer;
   } {
-    // Read plaintext file
-    const plaintextData = fs.readFileSync(inputFilePath);
-
     // Calculate hash of plaintext (for integrity tracking)
     const dataHash = crypto.createHash('sha256').update(plaintextData).digest('hex');
 
@@ -108,17 +105,42 @@ export class EncryptionService {
     // Create encrypted package: [IV][AuthTag][EncryptedData]
     const encryptedPackage = Buffer.concat([iv, authTag, encryptedData]);
 
-    // Write to temporary file
-    const tmpDir = os.tmpdir();
-    const outputFileName = `encrypted-${packageUuid}.bin`;
-    const outputFilePath = path.join(tmpDir, outputFileName);
-    fs.writeFileSync(outputFilePath, encryptedPackage);
-
     return {
-      encryptedFilePath: outputFilePath,
+      encryptedBuffer: encryptedPackage,
       dataHash: dataHash,
       fileSize: encryptedPackage.length,
       encryptionKey: encryptionKey,
+    };
+  }
+
+  /**
+   * Encrypts a file with UUID-derived key
+   * Returns path to encrypted file and metadata
+   * DEPRECATED: Use encryptBuffer() for better performance
+   */
+  encryptFile(inputFilePath: string, packageUuid: string): {
+    encryptedFilePath: string;
+    dataHash: string;
+    fileSize: number;
+    encryptionKey: Buffer;
+  } {
+    // Read plaintext file
+    const plaintextData = fs.readFileSync(inputFilePath);
+
+    // Use in-memory encryption
+    const result = this.encryptBuffer(plaintextData, packageUuid);
+
+    // Write to temporary file (for backward compatibility)
+    const tmpDir = fs.existsSync('/dev/shm') ? '/dev/shm' : os.tmpdir();
+    const outputFileName = `encrypted-${packageUuid}.bin`;
+    const outputFilePath = path.join(tmpDir, outputFileName);
+    fs.writeFileSync(outputFilePath, result.encryptedBuffer);
+
+    return {
+      encryptedFilePath: outputFilePath,
+      dataHash: result.dataHash,
+      fileSize: result.fileSize,
+      encryptionKey: result.encryptionKey,
     };
   }
 

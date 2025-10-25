@@ -54,7 +54,7 @@ export class SystemStats {
   total_poll_cycles: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-  peak_tps: number;
+  peak_tpm: number;
 
   @CreateDateColumn()
   created_at: Date;

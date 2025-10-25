@@ -33,6 +33,17 @@ import { ApiEnabledGuard } from './common/guards/api-enabled.guard';
         database: config.get<string>('database.path'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: true,
+        // OPTIMIZATION: Enable WAL mode for better concurrent write performance
+        // WAL (Write-Ahead Logging) allows readers to not block writers
+        extra: {
+          pragma: [
+            'journal_mode = WAL',          // Enable Write-Ahead Logging
+            'synchronous = NORMAL',        // Faster writes (still crash-safe)
+            'cache_size = -64000',         // 64MB cache (default is -2000 = 2MB)
+            'temp_store = MEMORY',         // Store temp tables in memory
+            'mmap_size = 30000000000',     // 30GB memory-mapped I/O
+          ],
+        },
       }),
       inject: [ConfigService],
     }),
