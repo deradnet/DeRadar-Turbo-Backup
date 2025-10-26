@@ -21,8 +21,8 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/config.yaml ./config.yaml
 
 ENV NODE_ENV=production
-ENV PORT=8080
+ENV PORT=1937
 
-EXPOSE 8080
+EXPOSE 1937
 
 ENTRYPOINT ["node", "dist/main.js"]

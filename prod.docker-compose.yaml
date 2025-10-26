@@ -12,13 +12,13 @@ services:
       - ./config.yaml:/app/config.yaml
       - ./keys:/app/keys
     ports:
-      - "9995:8080"
+      - "9995:1937"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       - nildb-keystore
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:1937/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -6,7 +6,7 @@ services:
     container_name: dev.derad.app
     restart: unless-stopped
     ports:
-      - "9995:8080"
+      - "9995:1937"
     volumes:
       - ./src:/app/src
       - ./config.yaml:/app/config.yaml
@@ -16,7 +16,7 @@ services:
       - NODE_ENV=development
       - APP_VERSION=0.0.1
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:1937/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
