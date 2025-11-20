@@ -11,6 +11,7 @@ import { AircraftTrackerService } from './aircraft-tracker.service';
 import { StatsGateway } from './stats.gateway';
 import { StatsBackupService } from './stats-backup.service';
 import { CommonModule } from '../common/common.module';
+import { NodeRegistrationService } from './node-registration.service';
 
 @Module({
   imports: [
@@ -18,8 +19,8 @@ import { CommonModule } from '../common/common.module';
     HttpModule,
     CommonModule,
   ],
-  providers: [ArchiveService, AircraftTrackerService, StatsGateway, StatsBackupService],
+  providers: [ArchiveService, AircraftTrackerService, StatsGateway, StatsBackupService, NodeRegistrationService],
   controllers: [ArchiveController],
-  exports: [ArchiveService, AircraftTrackerService, StatsBackupService],
+  exports: [ArchiveService, AircraftTrackerService, StatsBackupService, NodeRegistrationService],
 })
 export class ArchiveModule {}

@@ -553,6 +553,16 @@ export class ArchiveService {
       packageUuid = uuidv4();
     }
 
+    // Type assertion: packageUuid is guaranteed to be string at this point
+    const definitePackageUuid: string = packageUuid;
+
+    // Generate minute-based encryption key UUID for correlation with encrypted version
+    // Note: We don't actually encrypt the unencrypted version, but we store the same
+    // encryption key UUID so both versions can be correlated and decryption can work
+    const dummyBuffer = Buffer.from('dummy'); // Minimal buffer just to get the encryption key UUID
+    const encryptionKeyInfo = this.encryptionService.encryptBuffer(dummyBuffer, definitePackageUuid);
+    const encryptionKeyUuid: string = encryptionKeyInfo.encryptionKeyUuid;
+
     // CRITICAL: Use packageUuid for unique filename to avoid collisions with parallel batches
     const filePath = path.join(tmpDir, `standard-${packageUuid}.parquet`);
 
@@ -684,6 +694,7 @@ export class ArchiveService {
         { name: 'Data-Format', value: 'aviation-realtime-batch' },
         { name: 'Batch-Timestamp', value: String(snapshotTime) },
         { name: 'Package-UUID', value: packageUuid },
+        { name: 'Encryption-Key-UUID', value: encryptionKeyUuid },
         { name: 'Encrypted', value: 'false' },
       ];
 
@@ -780,6 +791,8 @@ export class ArchiveService {
     dataHash: string;
     fileSize: number;
     encryptionKey: Buffer;
+    packageUuid: string;
+    encryptionKeyUuid: string;
     icaoList: string[];
     utcTimestamp: string;
   }> {
@@ -879,8 +892,9 @@ export class ArchiveService {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
       // ENCRYPT THE BUFFER (in-memory, no disk I/O)
+      // Uses minute-based encryption key rotation
       const encryptionResult = this.encryptionService.encryptBuffer(plaintextBuffer, packageUuid);
-      console.log(`🔒 [ENCRYPTED] Encrypted, hash: ${encryptionResult.dataHash.substring(0, 16)}...`);
+      console.log(`🔒 [ENCRYPTED] Encrypted with key ${encryptionResult.encryptionKeyUuid}, hash: ${encryptionResult.dataHash.substring(0, 16)}...`);
 
       const utcTimestamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
 
@@ -890,6 +904,8 @@ export class ArchiveService {
         dataHash: encryptionResult.dataHash,
         fileSize: encryptionResult.fileSize,
         encryptionKey: encryptionResult.encryptionKey,
+        packageUuid: encryptionResult.packageUuid,
+        encryptionKeyUuid: encryptionResult.encryptionKeyUuid,
         icaoList,
         utcTimestamp,
       };
@@ -914,26 +930,28 @@ export class ArchiveService {
       throw new Error('Invalid snapshot time');
     }
 
-    // Use provided UUID or generate new one if not provided
+    // Ensure packageUuid is defined
     if (!packageUuid) {
       packageUuid = uuidv4();
     }
-    console.log(`🔒 [ENCRYPTED] Using Package UUID: ${packageUuid}`);
 
     // CRITICAL: Prepare buffer ONCE (outside retry loop)
     const prepared = await this.prepareEncryptedParquetBuffer(aircraftList, snapshotTime, packageUuid);
 
-    // STORE KEY IN NILDB - NON-BLOCKING (fire and forget)
-    this.encryptionService.storeKeyInNilDB(packageUuid, prepared.encryptionKey)
+    console.log(`🔒 [ENCRYPTED] Package UUID: ${packageUuid}, Encryption Key UUID: ${prepared.encryptionKeyUuid}`);
+
+    // STORE ENCRYPTION KEY IN NILDB - NON-BLOCKING (fire and forget, with deduplication)
+    // Note: Store the ENCRYPTION KEY UUID (minute-based), not the package UUID
+    this.encryptionService.storeKeyInNilDB(prepared.encryptionKeyUuid, prepared.encryptionKey)
       .then((nildbKeySaved) => {
         if (nildbKeySaved) {
-          console.log(`✅ Key stored in nilDB for package ${packageUuid}`);
+          console.log(`✅ Encryption key ${prepared.encryptionKeyUuid} stored in nilDB`);
         } else {
-          console.warn(`⚠️  nilDB storage failed for package ${packageUuid} (continuing with upload)`);
+          console.warn(`⚠️  nilDB storage failed for encryption key ${prepared.encryptionKeyUuid} (continuing with upload)`);
         }
       })
       .catch((error) => {
-        console.error(`❌ nilDB storage error for package ${packageUuid}:`, error.message);
+        console.error(`❌ nilDB storage error for encryption key ${prepared.encryptionKeyUuid}:`, error.message);
       });
 
     const encryptedFileSizeKB = (prepared.fileSize / 1024).toFixed(2);
@@ -956,6 +974,7 @@ export class ArchiveService {
       { name: 'Encrypted', value: 'true' },
       { name: 'Encryption-Algorithm', value: 'AES-256-GCM' },
       { name: 'Package-UUID', value: packageUuid },
+      { name: 'Encryption-Key-UUID', value: prepared.encryptionKeyUuid },
       { name: 'Data-Hash', value: prepared.dataHash },
       { name: 'Schema-Version', value: '2.0' },
       { name: 'Schema-Type', value: 'batch-aircraft' },

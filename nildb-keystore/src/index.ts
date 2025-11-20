@@ -4,6 +4,7 @@
  * API Endpoints:
  * - POST /store-key    - Store a package key
  * - GET /retrieve-key/:uuid - Retrieve a package key
+ * - POST /decrypt      - Decrypt encrypted package using encryption key UUID
  * - GET /health        - Health check
  */
 
@@ -12,10 +13,15 @@ import { SecretVaultBuilderClient, SecretVaultUserClient } from '@nillion/secret
 import { Keypair, Command, NucTokenBuilder } from '@nillion/nuc';
 import { SecretKey } from '@nillion/blindfold';
 import { bytesToHex } from '@noble/curves/utils';
-import { randomUUID } from 'crypto';
 import * as yaml from 'js-yaml';
 import * as fs from 'fs';
+// @ts-ignore
 import sqlite3 from 'sqlite3';
+
+// Use require for crypto to avoid TypeScript module resolution issues
+// @ts-ignore
+const crypto = require('crypto');
+const { randomUUID, Buffer } = crypto;
 
 // In Docker: /app/config.yaml (mounted volume)
 // In development: ../config.yaml (relative path)
@@ -73,14 +79,26 @@ async function initializeNilDB() {
       await builder.refreshRootToken();
       await builder.readProfile();
       console.log('   ✅ Builder already registered');
-    } catch (error) {
+    } catch (error: any) {
       console.log('   Registering builder...');
-      await builder.register({
-        did: builderKeypair.toDid().toString(),
-        name: 'DeRadar nilDB Keystore',
-      });
-      await builder.refreshRootToken();
-      console.log('   ✅ Builder registered');
+      try {
+        await builder.register({
+          did: builderKeypair.toDid().toString(),
+          name: 'DeRadar nilDB Keystore',
+        });
+        await builder.refreshRootToken();
+        console.log('   ✅ Builder registered');
+      } catch (regError: any) {
+        // If it's a duplicate error, try to refresh token anyway
+        if (regError.toString().includes('DuplicateEntryError') ||
+            (Array.isArray(regError) && regError.some((e: any) => e?.error?.body?.errors?.includes('DuplicateEntryError')))) {
+          console.log('   ⚠️  Builder already exists (duplicate), attempting to use existing registration');
+          await builder.refreshRootToken();
+          console.log('   ✅ Using existing builder registration');
+        } else {
+          throw regError;
+        }
+      }
     }
 
     // Get or create collection
@@ -108,6 +126,7 @@ async function initializeNilDB() {
 
   } catch (error: any) {
     console.error('❌ Failed to initialize nilDB:', error.message);
+    console.error('   Full error:', JSON.stringify(error, null, 2));
     throw error;
   }
 }
@@ -245,6 +264,45 @@ async function retrieveKeyFromNilDB(packageUuid: string): Promise<string | null>
   }
 }
 
+/**
+ * Decrypt encrypted package data using encryption key UUID
+ * Matches the encryption format from EncryptionService:
+ * [IV (12 bytes)][AuthTag (16 bytes)][EncryptedData]
+ */
+async function decryptPackage(encryptedData: any, encryptionKeyUuid: string): Promise<any> {
+  if (!initialized) {
+    throw new Error('nilDB not initialized');
+  }
+
+  // Retrieve encryption key from nilDB
+  const encryptionKeyHex = await retrieveKeyFromNilDB(encryptionKeyUuid);
+  if (!encryptionKeyHex) {
+    throw new Error(`Encryption key not found: ${encryptionKeyUuid}`);
+  }
+
+  const encryptionKey = Buffer.from(encryptionKeyHex, 'hex');
+
+  // Parse encrypted package structure: [12 bytes IV][16 bytes AuthTag][remaining: encrypted data]
+  if (encryptedData.length < 28) {
+    throw new Error('Invalid encrypted package: too short');
+  }
+
+  const iv = encryptedData.slice(0, 12);
+  const authTag = encryptedData.slice(12, 28);
+  const ciphertext = encryptedData.slice(28);
+
+  // Decrypt with AES-256-GCM
+  const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKey, iv);
+  decipher.setAuthTag(authTag);
+
+  const decryptedData = Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final(),
+  ]);
+
+  return decryptedData;
+}
+
 // ============================================================================
 // HTTP API Server
 // ============================================================================
@@ -347,6 +405,42 @@ app.get('/retrieve-key/:uuid', async (req, res) => {
   }
 });
 
+// Decrypt package endpoint
+app.post('/decrypt', async (req, res) => {
+  try {
+    const { encryptedData, encryptionKeyUuid } = req.body;
+
+    if (!encryptedData || !encryptionKeyUuid) {
+      return res.status(400).json({
+        success: false,
+        error: 'encryptedData (base64) and encryptionKeyUuid required',
+      });
+    }
+
+    // Convert base64 encoded encrypted data to Buffer
+    const encryptedBuffer = Buffer.from(encryptedData, 'base64');
+
+    // Decrypt the package
+    const decryptedData = await decryptPackage(encryptedBuffer, encryptionKeyUuid);
+
+    console.log(`✅ Decrypted package using key: ${encryptionKeyUuid}`);
+
+    // Return decrypted data as base64
+    res.json({
+      success: true,
+      encryptionKeyUuid,
+      decryptedData: decryptedData.toString('base64'),
+      size: decryptedData.length,
+    });
+  } catch (error: any) {
+    console.error('Error decrypting package:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 // ============================================================================
 // Startup
 // ============================================================================
@@ -364,6 +458,7 @@ async function main() {
     console.log(`🚀 HTTP Server listening on port ${PORT}`);
     console.log(`   POST http://localhost:${PORT}/store-key`);
     console.log(`   GET  http://localhost:${PORT}/retrieve-key/:uuid`);
+    console.log(`   POST http://localhost:${PORT}/decrypt`);
     console.log(`   GET  http://localhost:${PORT}/health\n`);
   });
 }
