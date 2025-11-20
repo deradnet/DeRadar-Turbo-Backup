@@ -10,6 +10,12 @@ import {
 @Index('IDX_archive_package_uuid', ['packageUuid'], {
   unique: false,
 })
+@Index('IDX_archive_created_at', ['createdAt'], {
+  unique: false,
+})
+@Index('IDX_archive_id_created_at', ['id', 'createdAt'], {
+  unique: false,
+})
 export class ArchiveRecord {
   @PrimaryGeneratedColumn()
   id: number;
@@ -32,8 +38,8 @@ export class ArchiveRecord {
   @Column({ type: 'text', nullable: true })
   format: string; // 'Parquet', 'JSON'
 
-  @Column({ type: 'simple-json', nullable: true })
-  icao_addresses: string[]; // Array of ICAO addresses in this batch
+  @Column({ type: 'simple-json', nullable: true, select: false })
+  icao_addresses: string[]; // Array of ICAO addresses in this batch - lazy loaded to improve performance
 
   @Column({ nullable: true })
   packageUuid: string; // UUID for encryption key derivation

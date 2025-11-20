@@ -1075,13 +1075,61 @@ export class ArchiveService {
     limit?: number;
     req: Request;
   }) {
-    // Get all records with pagination applied directly
-    // Order by ID DESC to ensure consistent ordering (newer records have higher IDs)
-    const [records, total] = await this.archiveRepo.findAndCount({
-      order: { id: 'DESC' },
-      skip: offset,
-      take: limit,
-    });
+    // OPTIMIZATION: For first page load, use approximate count instead of exact count
+    // This eliminates the slow COUNT(*) query on large tables
+    let total: number;
+    let records: ArchiveRecord[];
+
+    if (offset === 0) {
+      // First page: Get records immediately without waiting for count
+      // Run queries in parallel for faster initial load
+      const [recordsResult, countResult] = await Promise.all([
+        this.archiveRepo.find({
+          select: {
+            id: true,
+            txId: true,
+            source: true,
+            timestamp: true,
+            aircraft_count: true,
+            file_size_kb: true,
+            format: true,
+            packageUuid: true,
+            createdAt: true,
+          },
+          order: { id: 'DESC' },
+          take: limit,
+        }),
+        // Use estimated count for first page (much faster than exact count)
+        this.archiveRepo.createQueryBuilder()
+          .select('MAX(id)', 'max_id')
+          .getRawOne()
+          .then(result => result?.max_id || 0),
+      ]);
+
+      records = recordsResult;
+      total = countResult; // Approximate total based on max ID
+    } else {
+      // Subsequent pages: Standard query
+      [records, total] = await Promise.all([
+        this.archiveRepo.find({
+          select: {
+            id: true,
+            txId: true,
+            source: true,
+            timestamp: true,
+            aircraft_count: true,
+            file_size_kb: true,
+            format: true,
+            packageUuid: true,
+            createdAt: true,
+          },
+          order: { id: 'DESC' },
+          skip: offset,
+          take: limit,
+        }),
+        this.archiveRepo.count(),
+      ]);
+    }
 
     // Generate pagination URLs
     const baseUrl = `${req.protocol}://${req.get('host')}${req.path}`;
@@ -1094,7 +1142,7 @@ export class ArchiveService {
 
     // Return flat structure for backward compatibility
     return {
-      results: records, // Return flat records array
+      results: records,
       total,
       offset,
       limit,
@@ -1122,13 +1170,65 @@ export class ArchiveService {
     limit?: number;
     req: Request;
   }) {
-    // Get all encrypted records with pagination applied directly
-    // Order by ID DESC to ensure consistent ordering (newer records have higher IDs)
-    const [records, total] = await this.encryptedArchiveRepo.findAndCount({
-      order: { id: 'DESC' },
-      skip: offset,
-      take: limit,
-    });
+    // OPTIMIZATION: For first page load, use approximate count instead of exact count
+    // This eliminates the slow COUNT(*) query on large tables
+    let total: number;
+    let records: EncryptedArchiveRecord[];
+
+    if (offset === 0) {
+      // First page: Get records immediately without waiting for count
+      // Run queries in parallel for faster initial load
+      const [recordsResult, countResult] = await Promise.all([
+        this.encryptedArchiveRepo.find({
+          select: {
+            id: true,
+            txId: true,
+            source: true,
+            timestamp: true,
+            aircraft_count: true,
+            file_size_kb: true,
+            format: true,
+            packageUuid: true,
+            dataHash: true,
+            encryptionAlgorithm: true,
+            createdAt: true,
+          },
+          order: { id: 'DESC' },
+          take: limit,
+        }),
+        // Use estimated count for first page (much faster than exact count)
+        this.encryptedArchiveRepo.createQueryBuilder()
+          .select('MAX(id)', 'max_id')
+          .getRawOne()
+          .then((result: any) => result?.max_id || 0),
+      ]);
+
+      records = recordsResult;
+      total = countResult; // Approximate total based on max ID
+    } else {
+      // Subsequent pages: Standard query
+      [records, total] = await Promise.all([
+        this.encryptedArchiveRepo.find({
+          select: {
+            id: true,
+            txId: true,
+            source: true,
+            timestamp: true,
+            aircraft_count: true,
+            file_size_kb: true,
+            format: true,
+            packageUuid: true,
+            dataHash: true,
+            encryptionAlgorithm: true,
+            createdAt: true,
+          },
+          order: { id: 'DESC' },
+          skip: offset,
+          take: limit,
+        }),
+        this.encryptedArchiveRepo.count(),
+      ]);
+    }
 
     // Generate pagination URLs
     const baseUrl = `${req.protocol}://${req.get('host')}${req.path}`;
@@ -1141,7 +1241,7 @@ export class ArchiveService {
 
     // Return flat structure for backward compatibility
     return {
-      results: records, // Return flat records array
+      results: records,
       total,
       offset,
       limit,

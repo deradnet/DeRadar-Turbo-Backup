@@ -24,7 +24,7 @@ export class AircraftTrackerService {
   private readonly logger = new Logger(AircraftTrackerService.name);
   private aircraftCache = new Map<string, AircraftState>();
   private readonly REAPPEAR_THRESHOLD_MS = 5 * 60 * 1000;
-  private readonly POLL_INTERVAL_MS = 500;
+  private readonly POLL_INTERVAL_MS = 1000;
   private isRunning = false;
   private pollTimer: NodeJS.Timeout;
 
