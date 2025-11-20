@@ -92,6 +92,13 @@ export class AircraftTrackerService {
   private encryptedAircraftBatch: Array<{ aircraft: any; snapshotTime: number; hex: string }> = [];
   private readonly MAX_AIRCRAFT_PER_BATCH = 30;
 
+  // EMERGENCY QUEUE MANAGEMENT
+  private readonly EMERGENCY_QUEUE_THRESHOLD = 3000; // Trigger emergency cleanup at 3000 items
+  private readonly EMERGENCY_QUEUE_TARGET = 1500; // Reduce to 1500 items after cleanup
+  private readonly MAX_SAFE_QUEUE_SIZE = 5000; // Absolute maximum before rejecting new batches
+  private emergencyCleanupInProgress = false;
+  private totalDroppedBatches = 0;
+
   private stats = {
     totalUploadsAttempted: 0,
     totalUploadsSucceeded: 0,
@@ -747,7 +754,87 @@ export class AircraftTrackerService {
       this.broadcastStatsUpdate();
     }
 
+    // Check for emergency queue conditions
+    this.checkEmergencyQueue();
+
     this.processQueue();
+  }
+
+  /**
+   * Emergency queue management - prevents memory exhaustion
+   * Monitors both unencrypted and encrypted queues
+   */
+  private checkEmergencyQueue() {
+    const totalQueueSize = this.uploadQueue.length + this.encryptedUploadQueue.length;
+
+    // Absolute maximum - reject new batches
+    if (totalQueueSize >= this.MAX_SAFE_QUEUE_SIZE) {
+      this.logger.error(`🚨 [EMERGENCY] Queue at absolute maximum (${totalQueueSize}/${this.MAX_SAFE_QUEUE_SIZE}). Dropping oldest batches to prevent crash!`);
+      this.performEmergencyCleanup();
+      return;
+    }
+
+    // Emergency threshold - trigger cleanup
+    if (totalQueueSize >= this.EMERGENCY_QUEUE_THRESHOLD && !this.emergencyCleanupInProgress) {
+      this.logger.warn(`⚠️  [EMERGENCY] Queue size critical (${totalQueueSize}/${this.EMERGENCY_QUEUE_THRESHOLD}). Starting emergency cleanup...`);
+      this.performEmergencyCleanup();
+    }
+  }
+
+  /**
+   * Emergency cleanup - removes oldest batches from both queues
+   * Prioritizes keeping encrypted uploads over unencrypted
+   */
+  private performEmergencyCleanup() {
+    if (this.emergencyCleanupInProgress) return;
+    this.emergencyCleanupInProgress = true;
+
+    try {
+      const totalBefore = this.uploadQueue.length + this.encryptedUploadQueue.length;
+
+      // Calculate how many to drop from each queue
+      const excessItems = totalBefore - this.EMERGENCY_QUEUE_TARGET;
+      if (excessItems <= 0) {
+        this.emergencyCleanupInProgress = false;
+        return;
+      }
+
+      // Drop from unencrypted queue first (less critical)
+      const unencryptedDropCount = Math.min(this.uploadQueue.length, Math.ceil(excessItems * 0.7));
+      const encryptedDropCount = Math.min(this.encryptedUploadQueue.length, excessItems - unencryptedDropCount);
+
+      // Remove oldest items from unencrypted queue
+      this.uploadQueue.splice(0, unencryptedDropCount);
+
+      // Remove oldest items from encrypted queue
+      this.encryptedUploadQueue.splice(0, encryptedDropCount);
+
+      // Clear batchUuidMap for dropped batches to free memory
+      if (this.batchUuidMap.size > 1000) {
+        const keysArray = Array.from(this.batchUuidMap.keys());
+        const keysToDelete = keysArray.slice(0, keysArray.length - 500);
+        keysToDelete.forEach(key => this.batchUuidMap.delete(key));
+      }
+
+      // Force garbage collection hint (Node.js will GC when appropriate)
+      if (global.gc) {
+        global.gc();
+        this.logger.log('   Manual GC triggered');
+      }
+
+      const totalDropped = unencryptedDropCount + encryptedDropCount;
+      const totalAfter = this.uploadQueue.length + this.encryptedUploadQueue.length;
+
+      this.totalDroppedBatches += totalDropped;
+
+      this.logger.warn(`✅ [EMERGENCY] Cleanup complete:`);
+      this.logger.warn(`   Dropped ${unencryptedDropCount} unencrypted + ${encryptedDropCount} encrypted batches`);
+      this.logger.warn(`   Queue size: ${totalBefore} → ${totalAfter}`);
+      this.logger.warn(`   Total dropped (lifetime): ${this.totalDroppedBatches}`);
+
+    } finally {
+      this.emergencyCleanupInProgress = false;
+    }
   }
 
   private async processQueue() {
@@ -826,6 +913,9 @@ export class AircraftTrackerService {
     if (batches.length > 0) {
       this.broadcastStatsUpdate();
     }
+
+    // Check for emergency queue conditions
+    this.checkEmergencyQueue();
 
     this.processEncryptedQueue();
   }
@@ -1237,6 +1327,12 @@ export class AircraftTrackerService {
           status: data.status,
           elapsed_ms: Date.now() - data.startTime,
         })),
+        // Emergency queue management
+        total_queue_size: this.uploadQueue.length + this.encryptedUploadQueue.length,
+        emergency_threshold: this.EMERGENCY_QUEUE_THRESHOLD,
+        max_safe_size: this.MAX_SAFE_QUEUE_SIZE,
+        total_dropped_batches: this.totalDroppedBatches,
+        emergency_cleanup_active: this.emergencyCleanupInProgress,
       },
 
       encrypted_queue: {
