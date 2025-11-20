@@ -1190,8 +1190,6 @@ export class AircraftTrackerService {
       // We increment the counter optimistically since the upload succeeded
       // (actual nilDB success/failure is logged separately)
       this.encryptedStats.nildbKeysSaved++;
-      this.logger.log(`🔒 nilDB key storage initiated (total: ${this.encryptedStats.nildbKeysSaved})`);
-
 
       if (slotId && this.encryptedUploadProgress.has(slotId)) {
         const progress = this.encryptedUploadProgress.get(slotId);

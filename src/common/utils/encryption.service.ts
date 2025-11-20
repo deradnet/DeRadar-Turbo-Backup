@@ -21,6 +21,8 @@ export class EncryptionService {
   private readonly masterKey: Buffer;
   private currentMinuteEncryptionKey: { keyUuid: string; derivedKey: Buffer; timestamp: number } | null = null;
   private storedMinuteKeys: Set<string> = new Set(); // Track encryption key UUIDs already stored in nilDB
+  private uniqueKeysStoredCount: number = 0; // Total unique keys successfully stored in nilDB
+  private initPromise: Promise<void>;
 
   constructor(private readonly configService: ConfigService) {
     const keyHex = this.configService.get<string>('data.encryption_key');
@@ -28,12 +30,47 @@ export class EncryptionService {
       throw new Error('Invalid encryption key: must be 64 hex characters (32 bytes)');
     }
     this.masterKey = Buffer.from(keyHex, 'hex');
+
+    // Initialize counter from nilDB service (fire and forget but track promise)
+    this.initPromise = this.initializeCounterFromNilDB();
+  }
+
+  /**
+   * Initialize counter from nilDB keystore service stats
+   */
+  private async initializeCounterFromNilDB(): Promise<void> {
+    try {
+      const response = await fetch('http://nildb-keystore:3001/stats', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        this.uniqueKeysStoredCount = result.totalKeys || 0;
+        console.log(`🔑 [INIT] Loaded nilDB key count: ${this.uniqueKeysStoredCount}`);
+      } else {
+        console.warn('⚠️  Could not fetch nilDB stats, starting count at 0');
+      }
+    } catch (error: any) {
+      console.warn(`⚠️  Could not initialize key count from nilDB: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get count of unique keys successfully stored in nilDB
+   * Waits for initialization to complete before returning
+   */
+  async getUniqueKeysStoredCount(): Promise<number> {
+    await this.initPromise;
+    return this.uniqueKeysStoredCount;
   }
 
   /**
    * Gets or generates the encryption key for the current minute
    * Returns cached key if still within the same minute, otherwise generates new one
    * This is separate from the package UUID - it's the actual encryption key identifier
+   * Automatically stores new keys in nilDB (only once per minute)
    */
   private getOrGenerateMinuteEncryptionKey(): { keyUuid: string; derivedKey: Buffer } {
     const now = Date.now();
@@ -51,6 +88,20 @@ export class EncryptionService {
       };
 
       console.log(`🔑 [KEY ROTATION] New minute encryption key generated: ${encryptionKeyUuid}`);
+
+      // Store the new minute key in nilDB ONCE (fire-and-forget)
+      this.storeKeyInNilDB(encryptionKeyUuid, derivedKey)
+        .then((success) => {
+          if (success) {
+            this.uniqueKeysStoredCount++;
+            console.log(`✅ Minute key ${encryptionKeyUuid} stored in nilDB (total unique keys: ${this.uniqueKeysStoredCount})`);
+          } else {
+            console.warn(`⚠️  Failed to store minute key ${encryptionKeyUuid} in nilDB`);
+          }
+        })
+        .catch((error) => {
+          console.error(`❌ Error storing minute key in nilDB:`, error.message);
+        });
     }
 
     return {

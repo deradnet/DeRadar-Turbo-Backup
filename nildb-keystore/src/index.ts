@@ -48,12 +48,76 @@ let delegationToken: any;
 let collectionId: string;
 let userDid: string;
 let initialized = false;
-let keysStoredCount = 0; // Track total keys stored
+let keysStoredCount = 0; // Track total keys stored (loaded from DB on startup)
+
+/**
+ * Load key count from database
+ */
+function loadKeyCountFromDB(): Promise<number> {
+  let dbPath = config.database.path;
+  if (fs.existsSync('/app/database')) {
+    dbPath = dbPath.replace('./database', '/app/database');
+  }
+
+  return new Promise((resolve) => {
+    const database = new sqlite3.Database(dbPath, (err: any) => {
+      if (err) {
+        console.log('   No database found, starting count at 0');
+        resolve(0);
+        return;
+      }
+
+      database.get(
+        'SELECT value FROM nildb_metadata WHERE key = ?',
+        ['total_keys_stored'],
+        (err: any, row: any) => {
+          if (row && row.value) {
+            const count = parseInt(row.value, 10);
+            console.log(`   📊 Loaded key count from DB: ${count}`);
+            resolve(count);
+          } else {
+            resolve(0);
+          }
+          database.close();
+        }
+      );
+    });
+  });
+}
+
+/**
+ * Save key count to database
+ */
+function saveKeyCountToDB(count: number) {
+  let dbPath = config.database.path;
+  if (fs.existsSync('/app/database')) {
+    dbPath = dbPath.replace('./database', '/app/database');
+  }
+
+  const database = new sqlite3.Database(dbPath, (err: any) => {
+    if (err) return;
+
+    database.run(
+      'CREATE TABLE IF NOT EXISTS nildb_metadata (id INTEGER PRIMARY KEY, key TEXT UNIQUE, value TEXT, description TEXT, createdAt TEXT)',
+      () => {
+        database.run(
+          'INSERT OR REPLACE INTO nildb_metadata (key, value, description, createdAt) VALUES (?, ?, ?, ?)',
+          ['total_keys_stored', count.toString(), 'Total encryption keys stored in nilDB', new Date().toISOString()],
+          () => {
+            database.close();
+          }
+        );
+      }
+    );
+  });
+}
 
 async function initializeNilDB() {
   console.log('🔐 Initializing nilDB service...');
 
   try {
+    // Load existing key count from database
+    keysStoredCount = await loadKeyCountFromDB();
     // Create keypair from master key
     const builderKeypair = Keypair.from(NILDB_CONFIG.masterKey);
     const userKeypair = Keypair.from(NILDB_CONFIG.masterKey);
@@ -233,8 +297,9 @@ async function storeKeyInNilDB(packageUuid: string, encryptionKey: string): Prom
       }],
     });
 
-    // Increment counter on successful storage
+    // Increment counter on successful storage and save to DB
     keysStoredCount++;
+    saveKeyCountToDB(keysStoredCount);
 
     return true;
   } catch (error: any) {

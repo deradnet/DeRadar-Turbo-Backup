@@ -940,19 +940,8 @@ export class ArchiveService {
 
     console.log(`🔒 [ENCRYPTED] Package UUID: ${packageUuid}, Encryption Key UUID: ${prepared.encryptionKeyUuid}`);
 
-    // STORE ENCRYPTION KEY IN NILDB - NON-BLOCKING (fire and forget, with deduplication)
-    // Note: Store the ENCRYPTION KEY UUID (minute-based), not the package UUID
-    this.encryptionService.storeKeyInNilDB(prepared.encryptionKeyUuid, prepared.encryptionKey)
-      .then((nildbKeySaved) => {
-        if (nildbKeySaved) {
-          console.log(`✅ Encryption key ${prepared.encryptionKeyUuid} stored in nilDB`);
-        } else {
-          console.warn(`⚠️  nilDB storage failed for encryption key ${prepared.encryptionKeyUuid} (continuing with upload)`);
-        }
-      })
-      .catch((error) => {
-        console.error(`❌ nilDB storage error for encryption key ${prepared.encryptionKeyUuid}:`, error.message);
-      });
+    // Note: Minute-based encryption key is automatically stored in nilDB when generated
+    // (see EncryptionService.getOrGenerateMinuteEncryptionKey)
 
     const encryptedFileSizeKB = (prepared.fileSize / 1024).toFixed(2);
 
@@ -1168,5 +1157,12 @@ export class ArchiveService {
     });
 
     return data as string;
+  }
+
+  /**
+   * Get count of unique encryption keys stored in nilDB
+   */
+  async getUniqueKeysStoredCount(): Promise<number> {
+    return await this.encryptionService.getUniqueKeysStoredCount();
   }
 }
