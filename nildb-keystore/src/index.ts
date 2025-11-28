@@ -17,11 +17,8 @@ import * as yaml from 'js-yaml';
 import * as fs from 'fs';
 // @ts-ignore
 import sqlite3 from 'sqlite3';
-
-// Use require for crypto to avoid TypeScript module resolution issues
-// @ts-ignore
-const crypto = require('crypto');
-const { randomUUID, Buffer } = crypto;
+import * as crypto from 'crypto';
+import { randomUUID } from 'crypto';
 
 // In Docker: /app/config.yaml (mounted volume)
 // In development: ../config.yaml (relative path)
